@@ -17,11 +17,7 @@ import unittest
 from .core.config_parser import ConfigParser
 from .core.utils import *
 
-if os.name == 'nt':
-    prog_path = os.getcwd()
-else:
-    prog_path = os.path.normpath(os.path.abspath(os.path.dirname(sys.argv[0])))
-
+prog_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 tool_bin = os.path.join(prog_path, 'bin', platform.system(), platform.machine()) + os.sep
 set_file = os.path.join(prog_path, "bin", "setting.ini")
 
@@ -37,10 +33,9 @@ class Test(unittest.TestCase):
         except ValueError:
             ...
         pys.append('tkinter')
-        pys.remove('tool')
-        if os.name != 'nt':
-            pys.remove('sv_ttk_fixes')
-            pys.remove('pycase')
+        for skip in ['tool', 'sv_ttk_fixes', 'pycase']:
+            if skip in pys:
+                pys.remove(skip)
         sys.path.append(prog_path)
         for i in pys:
             print(f'Importing {i}')
