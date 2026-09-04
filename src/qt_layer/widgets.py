@@ -1,12 +1,11 @@
 import os
 import time
-import tkinter as tk
 
 import logging
-from PySide6.QtCore import QTimer, Qt
-from PySide6.QtGui import QColor
+from PySide6.QtCore import QTimer, Qt, Signal
+from PySide6.QtGui import QColor, QCursor
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QGridLayout,
-                               QLabel, QLineEdit, QHBoxLayout, QButtonGroup)
+                               QLabel, QLineEdit, QHBoxLayout, QButtonGroup, QFrame, QListWidget)
 from qfluentwidgets import InfoBar, InfoBarPosition, ListWidget, CheckBox, LineEdit, ComboBox, SubtitleLabel, \
     RadioButton, PushButton, BodyLabel
 from qfluentwidgets import (MessageBoxBase, SwitchButton, Slider,
@@ -14,26 +13,6 @@ from qfluentwidgets import (MessageBoxBase, SwitchButton, Slider,
 
 import utils
 from utils import gettype
-
-
-class TkinterEmbeddedPanel(QWidget):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-
-        # 1. Force Qt to create a native window handle/X11 ID for THIS specific widget
-        self.setAttribute(Qt.WidgetAttribute.WA_NativeWindow, True)
-        layout = QVBoxLayout()
-        self.widget = QWidget()
-        layout.addWidget(self.widget)
-        self.setLayout(layout)
-        # 2. Bind Tkinter root directly into the Qt Widget's handle
-        # The 'use' parameter forces Tkinter to render inside the Qt boundary
-        self.tk_root = tk.Tk(use=hex(self.widget.winId()))
-        self.tk_root.willdispatch()
-        self.timer = QTimer(self)
-        self.timer.setInterval(20)
-        self.timer.timeout.connect(self.tk_root.update)
-        self.timer.start()
 
 
 def show_info_bar(parent, title, content, bar_type: int = 3, duration=3000):
@@ -79,11 +58,11 @@ class NewProjectDialog(MessageBoxBase):
 
         self.titleLabel = SubtitleLabel(title, self)
         self.nameLineEdit = LineEdit(self)
-        self.nameLineEdit.setPlaceholderText('输入项目名称')
+        self.nameLineEdit.setPlaceholderText('Enter project name')
         self.nameLineEdit.setClearButtonEnabled(True)
         self.nameLineEdit.setText(initial_text)
 
-        self.errorLabel = CaptionLabel(text="项目名称无效或已存在")
+        self.errorLabel = CaptionLabel(text="Project name invalid or already exists")
         self.errorLabel.setTextColor("#cf1010", QColor(255, 28, 32))
 
         self.viewLayout.addWidget(self.titleLabel)
@@ -108,18 +87,18 @@ class NewProjectDialog(MessageBoxBase):
     def validate(self):
         project_name = self.nameLineEdit.text().strip()
         if not project_name:
-            self.errorLabel.setText("项目名称不能为空")
+            self.errorLabel.setText("Project name cannot be empty")
             self.errorLabel.show()
             return False
 
         invalid_chars = ['/', '\\', ':', '*', '?', '"', '<', '>', '|']
         if any(char in project_name for char in invalid_chars):
-            self.errorLabel.setText("名称包含非法字符")
+            self.errorLabel.setText("Name contains invalid characters")
             self.errorLabel.show()
             return False
 
         if project_name in self.existing_projects:
-            self.errorLabel.setText("项目名称已存在")
+            self.errorLabel.setText("Project name already exists")
             self.errorLabel.show()
             return False
 
@@ -127,17 +106,17 @@ class NewProjectDialog(MessageBoxBase):
         return True
 
 class InputDialog(MessageBoxBase):
-    """自定义对话框，用于创建或重命名项目"""
+    """Dialog for creating or renaming items"""
     def __init__(self, title, initial_text="", parent=None):
         super().__init__(parent)
 
         self.titleLabel = SubtitleLabel(title, self)
         self.nameLineEdit = LineEdit(self)
-        self.nameLineEdit.setPlaceholderText('输入')
+        self.nameLineEdit.setPlaceholderText('Input')
         self.nameLineEdit.setClearButtonEnabled(True)
         self.nameLineEdit.setText(initial_text)
 
-        self.errorLabel = CaptionLabel(text="无效")
+        self.errorLabel = CaptionLabel(text="Invalid")
         self.errorLabel.setTextColor("#cf1010", QColor(255, 28, 32))
 
         self.viewLayout.addWidget(self.titleLabel)
@@ -162,13 +141,13 @@ class InputDialog(MessageBoxBase):
     def validate(self):
         project_name = self.nameLineEdit.text().strip()
         if not project_name:
-            self.errorLabel.setText("不能为空")
+            self.errorLabel.setText("Cannot be empty")
             self.errorLabel.show()
             return False
 
         invalid_chars = ['/', '\\', ':', '*', '?', '"', '<', '>', '|']
         if any(char in project_name for char in invalid_chars):
-            self.errorLabel.setText("包含非法字符")
+            self.errorLabel.setText("Contains invalid characters")
             self.errorLabel.show()
             return False
 
@@ -217,6 +196,28 @@ class ConvertImageMessageBox(MessageBoxBase):
         self.list_widget = ListWidget(self)
         self.list_widget.setMinimumHeight(120)
         self.list_widget.setMaximumHeight(200)
+        self.list_widget.setSelectionMode(QListWidget.SelectionMode.NoSelection)
+        self.list_widget.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.list_widget.setStyleSheet("""
+            QListWidget {
+                background-color: #1a1a1e;
+                border: 1px solid #2d2d38;
+                border-radius: 6px;
+                padding: 4px;
+            }
+            QListWidget::item {
+                padding: 4px 8px;
+                border-radius: 4px;
+                color: #e4e4e7;
+            }
+            QListWidget::item:selected {
+                background: transparent;
+                color: #e4e4e7;
+            }
+            QListWidget::item:hover {
+                background-color: rgba(255, 255, 255, 0.05);
+            }
+        """)
 
         # 4. 创建底部控制部件：全选复选框 & 搜索输入框
         self.select_all_checkbox = CheckBox("Select all", self)
@@ -285,8 +286,8 @@ class ConvertImageMessageBox(MessageBoxBase):
         self.list_widget.clear()
         for item_text in items_to_show:
             item = QListWidgetItem(item_text)
-            # 设置该项为可勾选状态，并默认不勾选
-            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            # 设置该项为可勾选状态，并默认不勾选 (移除选择高亮)
+            item.setFlags(Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled)
             item.setCheckState(Qt.CheckState.Unchecked)
             self.list_widget.addItem(item)
         self.list_widget.blockSignals(False)
@@ -348,254 +349,349 @@ class ConvertImageMessageBox(MessageBoxBase):
 
 
 
+class SettingsCard(QFrame):
+    def __init__(self, title: str, parent=None):
+        super().__init__(parent)
+        self.setObjectName("settingsCard")
+        self.setStyleSheet("""
+            QFrame#settingsCard {
+                background-color: #1c1c22;
+                border: 1px solid #2d2d38;
+                border-radius: 8px;
+            }
+            QLabel {
+                border: none;
+                background: transparent;
+            }
+        """)
+        self.card_layout = QVBoxLayout(self)
+        self.card_layout.setContentsMargins(16, 12, 16, 14)
+        self.card_layout.setSpacing(10)
+
+        header = QLabel(title.upper(), self)
+        header.setStyleSheet("color: #38bdf8; font-size: 11px; font-weight: 700; letter-spacing: 0.8px;")
+        self.card_layout.addWidget(header)
+
+
 class PackSettingsDialog(MessageBoxBase):
     """
-    高级打包设置自定义对话框：继承自 MessageBoxBase，
-    支持嵌套分组、多状态滑动条，以及随开关状态动态显示/隐藏的隐藏组合框面板。
+    Advanced Partition Packing Settings Dialog:
+    Structured into organized Fluent cards for Filesystem Options and Output Options.
     """
 
     def __init__(self, parent=None):
         super().__init__(parent)
 
-        # 1. 创建核心自定义内容容器组件
+        # Dialog header title & description
+        self.titleLabel = SubtitleLabel("Partition Packing Settings", self)
+        self.titleLabel.setStyleSheet("color: #f4f4f5; font-size: 17px; font-weight: 600;")
+        self.subtitleLabel = CaptionLabel("Configure filesystem formats, compression parameters, and packaging options.", self)
+        self.subtitleLabel.setStyleSheet("color: #a1a1aa; font-size: 12px; margin-bottom: 4px;")
+
+        self.viewLayout.addWidget(self.titleLabel)
+        self.viewLayout.addWidget(self.subtitleLabel)
+
+        # Custom content container
         self.content_widget = QWidget(self)
         self.initCustomUI()
-
-        # 2. 将自定义容器直接安装进 MessageBoxBase 核心中
         self.viewLayout.addWidget(self.content_widget)
 
-        # 3. 配置底部的标准基础控制按钮文本
-        self.yesButton.setText("打包")
-        self.cancelButton.setText("取消")
+        # Action buttons
+        self.yesButton.setText("Pack")
+        self.cancelButton.setText("Cancel")
 
-        # 强制约束合理的现代弹出视窗比例范围，留足横向扩展空间
-        self.widget.setMinimumWidth(580)
+        self.widget.setMinimumWidth(640)
 
-    def _create_group_title(self, text):
-        """生成分组内敛极简副标题标签"""
-        label = CaptionLabel(text, self.content_widget)
-        label.setStyleSheet("color: #71717a; font-weight: bold; font-size: 11px;")
-        return label
+    def _field_lbl(self, text, parent):
+        lbl = QLabel(text, parent)
+        lbl.setStyleSheet("color: #e4e4e7; font-size: 13px; font-weight: 500; border: none;")
+        return lbl
 
-    def _create_field_label(self, text):
-        """生成字段主文本说明标签"""
-        label = QLabel(text, self.content_widget)
-        label.setStyleSheet("color: #ffffff; font-size: 14px; font-weight: 500;")
-        return label
+    def _sub_lbl(self, text, parent):
+        lbl = QLabel(text, parent)
+        lbl.setStyleSheet("color: #94a3b8; font-size: 12px; font-weight: 600; border: none;")
+        return lbl
+
+    def _switch_lbl(self, text, parent):
+        lbl = QLabel(text, parent)
+        lbl.setStyleSheet("color: #d4d4d8; font-size: 13px; border: none;")
+        return lbl
+
+    def _divider(self, parent):
+        div = QFrame(parent)
+        div.setFrameShape(QFrame.Shape.HLine)
+        div.setStyleSheet("color: #272730; background-color: #272730; max-height: 1px; border: none; margin: 4px 0;")
+        return div
 
     def initCustomUI(self):
         main_layout = QVBoxLayout(self.content_widget)
-        main_layout.setContentsMargins(0, 0, 0, 12)
-        main_layout.setSpacing(20)
+        main_layout.setContentsMargins(0, 0, 0, 4)
+        main_layout.setSpacing(12)
 
         # =========================================================================
-        # 📂 1. EXT4设置 分组
+        # 📂 CARD 1: Filesystem Configuration (EXT4, EROFS, F2FS)
         # =========================================================================
-        ext4_container = QWidget(self.content_widget)
-        ext4_layout = QVBoxLayout(ext4_container)
-        ext4_layout.setContentsMargins(0, 0, 0, 0)
-        ext4_layout.setSpacing(8)
+        fs_card = SettingsCard("Filesystem Configuration", self.content_widget)
 
-        ext4_layout.addWidget(self._create_group_title("EXT4设置"))
+        # --- EXT4 Section ---
+        fs_card.card_layout.addWidget(self._sub_lbl("EXT4 Options", fs_card))
+        ext4_row = QHBoxLayout()
+        ext4_row.setSpacing(16)
 
-        ext4_grid = QHBoxLayout()
-        ext4_grid.setSpacing(16)
-
-        self.pack_method_label = self._create_field_label("打包方式：")
-        self.pack_method_combo = ComboBox(ext4_container)
+        # Pack Method
+        pm_col = QVBoxLayout()
+        pm_col.setSpacing(4)
+        pm_col.addWidget(self._field_lbl("Pack Method", fs_card))
+        self.pack_method_combo = ComboBox(fs_card)
         self.pack_method_combo.addItems(["make_ext4fs", "mke2fs+e2fsdroid"])
+        self.pack_method_combo.setFixedHeight(32)
+        pm_col.addWidget(self.pack_method_combo)
+        ext4_row.addLayout(pm_col, 1)
 
-        self.size_handle_label = self._create_field_label("大小处理：")
-        self.size_handle_combo = ComboBox(ext4_container)
-        self.size_handle_combo.addItems(["自动读取", "手动固定"])
+        # Size Handling
+        sh_col = QVBoxLayout()
+        sh_col.setSpacing(4)
+        sh_col.addWidget(self._field_lbl("Size Handling", fs_card))
+        self.size_handle_combo = ComboBox(fs_card)
+        self.size_handle_combo.addItems(["Auto Detect", "Manual Fixed"])
+        self.size_handle_combo.setFixedHeight(32)
+        sh_col.addWidget(self.size_handle_combo)
+        ext4_row.addLayout(sh_col, 1)
 
-        ext4_grid.addWidget(self.pack_method_label)
-        ext4_grid.addWidget(self.pack_method_combo, 1)
-        ext4_grid.addWidget(self.size_handle_label)
-        ext4_grid.addWidget(self.size_handle_combo, 1)
-        ext4_layout.addLayout(ext4_grid)
-        main_layout.addWidget(ext4_container)
+        fs_card.card_layout.addLayout(ext4_row)
+        fs_card.card_layout.addWidget(self._divider(fs_card))
 
-        # =========================================================================
-        # 📦 2. EROFS打包 分组
-        # =========================================================================
-        erofs_container = QWidget(self.content_widget)
-        erofs_layout = QVBoxLayout(erofs_container)
-        erofs_layout.setContentsMargins(0, 0, 0, 0)
-        erofs_layout.setSpacing(10)
-
-        erofs_layout.addWidget(self._create_group_title("EROFS打包"))
-
+        # --- EROFS Section ---
+        fs_card.card_layout.addWidget(self._sub_lbl("EROFS Options", fs_card))
         erofs_row1 = QHBoxLayout()
-        self.compress_algo_label = self._create_field_label("压缩算法：")
-        self.compress_algo_combo = ComboBox(erofs_container)
+        erofs_row1.setSpacing(16)
+
+        # Algo
+        algo_col = QVBoxLayout()
+        algo_col.setSpacing(4)
+        algo_col.addWidget(self._field_lbl("Compression Algorithm", fs_card))
+        self.compress_algo_combo = ComboBox(fs_card)
         self.compress_algo_combo.addItems(["lz4", "lz4hc", "lzma", "deflate", "zstd"])
-        self.compress_algo_combo.setText("lz4hc")
-        self.support_old_kernel_switch = SwitchButton(parent=erofs_container)
+        self.compress_algo_combo.setCurrentText("lz4hc")
+        self.compress_algo_combo.setFixedHeight(32)
+        algo_col.addWidget(self.compress_algo_combo)
+        erofs_row1.addLayout(algo_col, 1)
+
+        # Old Kernel Switch
+        old_kernel_col = QVBoxLayout()
+        old_kernel_col.setSpacing(4)
+        old_kernel_col.addWidget(self._field_lbl("Legacy Compatibility", fs_card))
+        sw_kernel_row = QHBoxLayout()
+        sw_kernel_row.setSpacing(8)
+        self.support_old_kernel_switch = SwitchButton(fs_card)
         self.support_old_kernel_switch.setOffText("")
         self.support_old_kernel_switch.setOnText("")
-        self.support_old_kernel_label = QLabel("支持旧内核", erofs_container)
-        self.support_old_kernel_label.setStyleSheet("color: #ffffff; font-size: 13px;")
+        self.support_old_kernel_label = self._switch_lbl("Support Old Kernel (< 5.4)", fs_card)
+        sw_kernel_row.addWidget(self.support_old_kernel_switch)
+        sw_kernel_row.addWidget(self.support_old_kernel_label)
+        sw_kernel_row.addStretch(1)
+        old_kernel_col.addLayout(sw_kernel_row)
+        erofs_row1.addLayout(old_kernel_col, 1)
+        fs_card.card_layout.addLayout(erofs_row1)
 
-        erofs_row1.addWidget(self.compress_algo_label)
-        erofs_row1.addWidget(self.compress_algo_combo, 1)
-        erofs_row1.addSpacing(24)
-        erofs_row1.addWidget(self.support_old_kernel_switch)
-        erofs_row1.addWidget(self.support_old_kernel_label)
-        erofs_layout.addLayout(erofs_row1)
-
-        erofs_row2 = QHBoxLayout()
-        self.erofs_level_label = QLabel("EROFS等级: 8", erofs_container)
-        self.erofs_level_label.setStyleSheet("color: #ffffff; font-size: 13px; min-width: 90px;")
-        self.erofs_slider = Slider(Qt.Orientation.Horizontal, erofs_container)
+        # Slider row
+        erofs_slider_row = QHBoxLayout()
+        erofs_slider_row.setSpacing(12)
+        self.erofs_level_label = QLabel("EROFS Level: 8", fs_card)
+        self.erofs_level_label.setStyleSheet("color: #e4e4e7; font-size: 13px; font-weight: 500; min-width: 105px;")
+        self.erofs_slider = Slider(Qt.Orientation.Horizontal, fs_card)
         self.erofs_slider.setRange(0, 20)
         self.erofs_slider.setValue(8)
-        self.erofs_slider.valueChanged.connect(lambda v: self.erofs_level_label.setText(f"EROFS等级: {v}"))
+        self.erofs_slider.valueChanged.connect(lambda v: self.erofs_level_label.setText(f"EROFS Level: {v}"))
+        erofs_slider_row.addWidget(self.erofs_level_label)
+        erofs_slider_row.addWidget(self.erofs_slider, 1)
+        fs_card.card_layout.addLayout(erofs_slider_row)
 
-        erofs_row2.addWidget(self.erofs_level_label)
-        erofs_row2.addWidget(self.erofs_slider, 1)
-        erofs_layout.addLayout(erofs_row2)
-        main_layout.addWidget(erofs_container)
+        fs_card.card_layout.addWidget(self._divider(fs_card))
 
-        # =========================================================================
-        # ⚙️ 3. F2FS设置 分组
-        # =========================================================================
-        f2fs_container = QWidget(self.content_widget)
-        f2fs_layout = QVBoxLayout(f2fs_container)
-        f2fs_layout.setContentsMargins(0, 0, 0, 0)
-        f2fs_layout.setSpacing(8)
-
-        f2fs_layout.addWidget(self._create_group_title("F2FS设置"))
-
+        # --- F2FS Section ---
+        fs_card.card_layout.addWidget(self._sub_lbl("F2FS Options", fs_card))
         f2fs_row = QHBoxLayout()
-        f2fs_row.setSpacing(12)
+        f2fs_row.setSpacing(24)
 
-        self.f2fs_readonly_switch = SwitchButton(f2fs_container)
+        f2fs_ro_box = QHBoxLayout()
+        f2fs_ro_box.setSpacing(8)
+        self.f2fs_readonly_switch = SwitchButton(fs_card)
         self.f2fs_readonly_switch.setOnText("")
         self.f2fs_readonly_switch.setOffText("")
-        self.f2fs_readonly_lbl = QLabel("只读", f2fs_container)
-        self.f2fs_readonly_lbl.setStyleSheet("color: #ffffff; font-size: 13px;")
+        self.f2fs_readonly_lbl = self._switch_lbl("Read-only Filesystem", fs_card)
+        f2fs_ro_box.addWidget(self.f2fs_readonly_switch)
+        f2fs_ro_box.addWidget(self.f2fs_readonly_lbl)
+        f2fs_row.addLayout(f2fs_ro_box)
 
-        self.f2fs_compress_switch = SwitchButton(f2fs_container)
+        f2fs_comp_box = QHBoxLayout()
+        f2fs_comp_box.setSpacing(8)
+        self.f2fs_compress_switch = SwitchButton(fs_card)
         self.f2fs_compress_switch.setOnText("")
         self.f2fs_compress_switch.setOffText("")
-        self.f2fs_compress_lbl = QLabel("压缩", f2fs_container)
-        self.f2fs_compress_lbl.setStyleSheet("color: #ffffff; font-size: 13px;")
-
-        f2fs_row.addWidget(self.f2fs_readonly_switch)
-        f2fs_row.addWidget(self.f2fs_readonly_lbl)
-        f2fs_row.addSpacing(20)
-        f2fs_row.addWidget(self.f2fs_compress_switch)
-        f2fs_row.addWidget(self.f2fs_compress_lbl)
+        self.f2fs_compress_lbl = self._switch_lbl("Filesystem Compression", fs_card)
+        f2fs_comp_box.addWidget(self.f2fs_compress_switch)
+        f2fs_comp_box.addWidget(self.f2fs_compress_lbl)
+        f2fs_row.addLayout(f2fs_comp_box)
         f2fs_row.addStretch(1)
-        f2fs_layout.addLayout(f2fs_row)
-        main_layout.addWidget(f2fs_container)
+
+        fs_card.card_layout.addLayout(f2fs_row)
+        main_layout.addWidget(fs_card)
 
         # =========================================================================
-        # 🛠️ 4. 其他设置 分组
+        # ⚙️ CARD 2: Output & Build Options
         # =========================================================================
-        other_container = QWidget(self.content_widget)
-        other_layout = QVBoxLayout(other_container)
-        other_layout.setContentsMargins(0, 0, 0, 0)
-        other_layout.setSpacing(12)
+        build_card = SettingsCard("Packaging & Output Options", self.content_widget)
 
-        other_layout.addWidget(self._create_group_title("其他设置"))
+        # Format & FS Conversion Row
+        out_row = QHBoxLayout()
+        out_row.setSpacing(16)
 
-        # Brotli 等级滑动条区域
-        brotli_row = QHBoxLayout()
-        self.brotli_lbl = QLabel("Brotli等级: 0", other_container)
-        self.brotli_lbl.setStyleSheet("color: #ffffff; font-size: 15px; font-weight: 500; min-width: 100px;")
-        self.brotli_slider = Slider(Qt.Orientation.Horizontal, other_container)
-        self.brotli_slider.setRange(0, 11)
-        self.brotli_slider.valueChanged.connect(lambda v: self.brotli_lbl.setText(f"Brotli等级: {v}"))
-
-        brotli_row.addWidget(self.brotli_lbl)
-        brotli_row.addWidget(self.brotli_slider, 1)
-        other_layout.addLayout(brotli_row)
-
-        # UTC 输入区域
-        utc_row = QHBoxLayout()
-        self.utc_lbl = QLabel("UTC:", other_container)
-        self.utc_lbl.setStyleSheet("color: #ffffff; font-size: 15px; min-width: 45px;")
-        self.utc_input = QLineEdit(str(int(time.time())), other_container)
-        self.utc_input.setStyleSheet("""
-            QLineEdit {
-                background-color: #2a2a2e;
-                border: 1px solid #3f3f46;
-                border-radius: 4px;
-                color: #ffffff;
-                padding: 4px 8px;
-                font-family: monospace;
-            }
-        """)
-        utc_row.addWidget(self.utc_lbl)
-        utc_row.addWidget(self.utc_input, 1)
-        other_layout.addLayout(utc_row)
-
-        # 底部复杂配置网格矩阵面板
-        grid_matrix = QGridLayout()
-        grid_matrix.setSpacing(12)
-
-        self.format_label = self._create_field_label("打包格式：")
-        self.format_combo = ComboBox(other_container)
+        format_col = QVBoxLayout()
+        format_col.setSpacing(4)
+        format_col.addWidget(self._field_lbl("Output Image Format", build_card))
+        self.format_combo = ComboBox(build_card)
         self.format_combo.addItems(["raw", "sparse"])
+        self.format_combo.setFixedHeight(32)
+        format_col.addWidget(self.format_combo)
+        out_row.addLayout(format_col, 1)
 
-        self.sw_convert = SwitchButton(other_container)
+        conv_col = QVBoxLayout()
+        conv_col.setSpacing(4)
+        conv_col.addWidget(self._field_lbl("Format Conversion", build_card))
+        conv_sw_row = QHBoxLayout()
+        conv_sw_row.setSpacing(8)
+        self.sw_convert = SwitchButton(build_card)
         self.sw_convert.setOffText('')
         self.sw_convert.setOnText('')
-        self.lbl_convert = QLabel("文件系统转换", other_container)
-        self.lbl_convert.setStyleSheet("color: #ffffff; font-size: 13px;")
+        self.lbl_convert = self._switch_lbl("Enable FS Conversion", build_card)
+        conv_sw_row.addWidget(self.sw_convert)
+        conv_sw_row.addWidget(self.lbl_convert)
+        conv_sw_row.addStretch(1)
+        conv_col.addLayout(conv_sw_row)
+        out_row.addLayout(conv_col, 1)
+        build_card.card_layout.addLayout(out_row)
 
-        # 💡 创建隐藏的文件系统来源与目标下拉框组合
-        self.src_fs_combo = ComboBox(other_container)
+        # Conversion sub-row (collapsible)
+        self.conv_detail_widget = QWidget(build_card)
+        conv_detail_layout = QHBoxLayout(self.conv_detail_widget)
+        conv_detail_layout.setContentsMargins(8, 4, 8, 4)
+        conv_detail_layout.setSpacing(10)
+        self.conv_detail_widget.setStyleSheet("""
+            QWidget {
+                background-color: #141418;
+                border: 1px solid #2d2d38;
+                border-radius: 6px;
+            }
+        """)
+
+        lbl_src = QLabel("Source:", self.conv_detail_widget)
+        lbl_src.setStyleSheet("color: #94a3b8; font-size: 12px; font-weight: 500;")
+        self.src_fs_combo = ComboBox(self.conv_detail_widget)
         self.src_fs_combo.addItems(["ext", "f2fs", "erofs"])
-        self.src_fs_combo.setFixedWidth(85)
+        self.src_fs_combo.setFixedHeight(30)
 
-        self.dest_fs_combo = ComboBox(other_container)
+        lbl_arrow = QLabel("➔", self.conv_detail_widget)
+        lbl_arrow.setStyleSheet("color: #38bdf8; font-size: 14px; font-weight: bold;")
+
+        lbl_dst = QLabel("Target:", self.conv_detail_widget)
+        lbl_dst.setStyleSheet("color: #94a3b8; font-size: 12px; font-weight: 500;")
+        self.dest_fs_combo = ComboBox(self.conv_detail_widget)
         self.dest_fs_combo.addItems(["ext", "f2fs", "erofs"])
-        self.dest_fs_combo.setFixedWidth(85)
+        self.dest_fs_combo.setFixedHeight(30)
 
-        # 初始默认状态必须完全隐藏
-        self.src_fs_combo.hide()
-        self.dest_fs_combo.hide()
+        conv_detail_layout.addWidget(lbl_src)
+        conv_detail_layout.addWidget(self.src_fs_combo, 1)
+        conv_detail_layout.addWidget(lbl_arrow)
+        conv_detail_layout.addWidget(lbl_dst)
+        conv_detail_layout.addWidget(self.dest_fs_combo, 1)
 
-        # 🔗 核心信号槽：将文件系统转换开关绑定到可见性处理器上
+        self.conv_detail_widget.hide()
         self.sw_convert.checkedChanged.connect(self._on_convert_toggled)
+        build_card.card_layout.addWidget(self.conv_detail_widget)
 
-        self.sw_vbmeta = SwitchButton(other_container)
+        # Brotli Level Slider
+        brotli_row = QHBoxLayout()
+        brotli_row.setSpacing(12)
+        self.brotli_lbl = QLabel("Brotli Level: 0", build_card)
+        self.brotli_lbl.setStyleSheet("color: #e4e4e7; font-size: 13px; font-weight: 500; min-width: 105px;")
+        self.brotli_slider = Slider(Qt.Orientation.Horizontal, build_card)
+        self.brotli_slider.setRange(0, 11)
+        self.brotli_slider.setValue(0)
+        self.brotli_slider.valueChanged.connect(lambda v: self.brotli_lbl.setText(f"Brotli Level: {v}"))
+        brotli_row.addWidget(self.brotli_lbl)
+        brotli_row.addWidget(self.brotli_slider, 1)
+        build_card.card_layout.addLayout(brotli_row)
+
+        # UTC Timestamp row
+        utc_row = QHBoxLayout()
+        utc_row.setSpacing(10)
+        self.utc_lbl = self._field_lbl("Build Timestamp (UTC):", build_card)
+        self.utc_lbl.setMinimumWidth(150)
+        self.utc_input = QLineEdit(str(int(time.time())), build_card)
+        self.utc_input.setStyleSheet("""
+            QLineEdit {
+                background-color: #141418;
+                border: 1px solid #3f3f46;
+                border-radius: 6px;
+                color: #38bdf8;
+                padding: 4px 8px;
+                font-family: monospace;
+                font-size: 13px;
+            }
+            QLineEdit:focus {
+                border: 1px solid #3b82f6;
+            }
+        """)
+        self.btn_now = PushButton("Current Time", build_card)
+        self.btn_now.setFixedHeight(28)
+        self.btn_now.clicked.connect(lambda: self.utc_input.setText(str(int(time.time()))))
+
+        utc_row.addWidget(self.utc_lbl)
+        utc_row.addWidget(self.utc_input, 1)
+        utc_row.addWidget(self.btn_now)
+        build_card.card_layout.addLayout(utc_row)
+
+        build_card.card_layout.addWidget(self._divider(build_card))
+
+        # Bottom Safety & Flags Row
+        flags_row = QHBoxLayout()
+        flags_row.setSpacing(24)
+
+        vb_box = QHBoxLayout()
+        vb_box.setSpacing(8)
+        self.sw_vbmeta = SwitchButton(build_card)
         self.sw_vbmeta.setOffText("")
         self.sw_vbmeta.setOnText("")
-        self.lbl_vbmeta = QLabel("处理Vbmeta", other_container)
-        self.lbl_vbmeta.setStyleSheet("color: #ffffff; font-size: 13px;")
+        self.lbl_vbmeta = self._switch_lbl("Patch Vbmeta (AVB Flag)", build_card)
+        vb_box.addWidget(self.sw_vbmeta)
+        vb_box.addWidget(self.lbl_vbmeta)
+        flags_row.addLayout(vb_box)
 
-        self.sw_delete = SwitchButton(other_container)
+        del_box = QHBoxLayout()
+        del_box.setSpacing(8)
+        self.sw_delete = SwitchButton(build_card)
         self.sw_delete.setOffText("")
         self.sw_delete.setOnText("")
-        self.lbl_delete = QLabel("删除源文件", other_container)
-        self.lbl_delete.setStyleSheet("color: #ffffff; font-size: 13px;")
+        self.lbl_delete = self._switch_lbl("Delete Source Files After Packing", build_card)
+        del_box.addWidget(self.sw_delete)
+        del_box.addWidget(self.lbl_delete)
+        flags_row.addLayout(del_box)
+        flags_row.addStretch(1)
 
-        # 将所有控制元素对齐组装入 QGridLayout 矩阵中
-        grid_matrix.addWidget(self.format_label, 0, 0)
-        grid_matrix.addWidget(self.format_combo, 0, 1)
-        grid_matrix.addWidget(self.sw_convert, 0, 2)
-        grid_matrix.addWidget(self.lbl_convert, 0, 3)
-
-        # 💡 将转换下拉框追加在第0行、第4和第5列上
-        grid_matrix.addWidget(self.src_fs_combo, 0, 4)
-        grid_matrix.addWidget(self.dest_fs_combo, 0, 5)
-
-        grid_matrix.addWidget(self.sw_vbmeta, 1, 0)
-        grid_matrix.addWidget(self.lbl_vbmeta, 1, 1)
-        grid_matrix.addWidget(self.sw_delete, 1, 2)
-        grid_matrix.addWidget(self.lbl_delete, 1, 3)
-        other_layout.addLayout(grid_matrix)
-        main_layout.addWidget(other_container)
+        build_card.card_layout.addLayout(flags_row)
+        main_layout.addWidget(build_card)
 
     def _on_convert_toggled(self, is_checked: bool):
-        self.src_fs_combo.setVisible(is_checked)
-        self.dest_fs_combo.setVisible(is_checked)
+        self.conv_detail_widget.setVisible(is_checked)
         self.content_widget.adjustSize()
         self.widget.adjustSize()
+
+
+OPLUS_PARTITIONS = [
+    "my_product", "my_region", "my_heytap", "my_stock", "my_carrier",
+    "my_preload", "my_engineering", "my_bigball", "my_manifest", "my_company"
+]
 
 
 class PackSuperMessageBox(MessageBoxBase):
@@ -613,7 +709,7 @@ class PackSuperMessageBox(MessageBoxBase):
         self.viewLayout.addWidget(self.titleLabel)
 
         # 2. Partition Type Section
-        self.viewLayout.addWidget(SubtitleLabel("分区类型", self))
+        self.viewLayout.addWidget(SubtitleLabel("Partition Type", self))
         lf1_layout = QHBoxLayout()
         self.type_group = QButtonGroup(self)
         radios = [("A-only", 1), ("Virtual-ab", 2), ("A/B", 3)]
@@ -626,7 +722,7 @@ class PackSuperMessageBox(MessageBoxBase):
         self.viewLayout.addLayout(lf1_layout)
 
         # 3. Attributes Section
-        self.viewLayout.addWidget(SubtitleLabel("属性", self))
+        self.viewLayout.addWidget(SubtitleLabel("Attributes", self))
         lf1_r_layout = QHBoxLayout()
         self.attrib_group = QButtonGroup(self)
         self.rb_readonly = RadioButton("Readonly", self)
@@ -639,16 +735,16 @@ class PackSuperMessageBox(MessageBoxBase):
         self.viewLayout.addLayout(lf1_r_layout)
 
         # 4. Settings Section
-        self.viewLayout.addWidget(SubtitleLabel("设置", self))
+        self.viewLayout.addWidget(SubtitleLabel("Settings", self))
         lf2_layout = QHBoxLayout()
 
-        lf2_layout.addWidget(SubtitleLabel("簇名", self))
+        lf2_layout.addWidget(SubtitleLabel("Group Name", self))
         self.show_group_name = ComboBox(self)
-        self.show_group_name.addItems(["qti_dynamic_partitions", "main", "mot_dp_group"])
+        self.show_group_name.addItems(["qti_dynamic_partitions", "oplus_dynamic_partitions", "main", "mot_dp_group"])
         self.show_group_name.setCurrentIndex(0)
         lf2_layout.addWidget(self.show_group_name)
 
-        lf2_layout.addWidget(SubtitleLabel("Super大小", self))
+        lf2_layout.addWidget(SubtitleLabel("Super Size", self))
         self.super_size_edit = LineEdit(self)
         self.super_size_edit.setText("9126805504")
         self.super_size_edit.textChanged.connect(self.validate_digits)
@@ -656,35 +752,57 @@ class PackSuperMessageBox(MessageBoxBase):
         self.viewLayout.addLayout(lf2_layout)
 
         # 5. Pack Partitions Section
-        self.viewLayout.addWidget(SubtitleLabel("打包分区", self))
+        self.viewLayout.addWidget(SubtitleLabel("Pack Partitions", self))
         self.tl = ListWidget(self)
         self.tl.setMinimumHeight(180)
+        self.tl.setSelectionMode(QListWidget.SelectionMode.NoSelection)
+        self.tl.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.tl.setStyleSheet("""
+            QListWidget {
+                background-color: #1a1a1e;
+                border: 1px solid #2d2d38;
+                border-radius: 6px;
+                padding: 4px;
+            }
+            QListWidget::item {
+                padding: 4px 8px;
+                border-radius: 4px;
+                color: #e4e4e7;
+            }
+            QListWidget::item:selected {
+                background: transparent;
+                color: #e4e4e7;
+            }
+            QListWidget::item:hover {
+                background-color: rgba(255, 255, 255, 0.05);
+            }
+        """)
         self.viewLayout.addWidget(self.tl)
 
         # 6. Checkboxes & Action Layout Configurations
         self.switch_sparse = SwitchButton(self)
-        self.switch_sparse.setOffText("Sparse压缩")
-        self.switch_sparse.setOnText("Sparse压缩")
+        self.switch_sparse.setOffText("Sparse Compression")
+        self.switch_sparse.setOnText("Sparse Compression")
         self.viewLayout.addWidget(self.switch_sparse)
 
         t_frame_layout = QHBoxLayout()
         self.switch_delete = SwitchButton(self)
-        self.switch_delete.setOffText("删除源文件")
-        self.switch_delete.setOnText("删除源文件")
+        self.switch_delete.setOffText("Delete Source Files")
+        self.switch_delete.setOnText("Delete Source Files")
         t_frame_layout.addWidget(self.switch_delete)
 
-        self.btn_refresh = PushButton("刷新", self)
+        self.btn_refresh = PushButton("Refresh", self)
         self.btn_refresh.clicked.connect(self.refresh)
         t_frame_layout.addWidget(self.btn_refresh)
 
-        self.g_b = PushButton("生成LIST", self)
+        self.g_b = PushButton("Generate List", self)
         self.g_b.clicked.connect(self.generate)
         t_frame_layout.addWidget(self.g_b)
         self.viewLayout.addLayout(t_frame_layout)
 
         # 7. Bottom Accept/Cancel Bar configuration setups
         self.yesButton.setText("Pack")
-        self.cancelButton.setText("取消")
+        self.cancelButton.setText("Cancel")
         self.read_list()
         self.refresh()
 
@@ -732,7 +850,7 @@ class PackSuperMessageBox(MessageBoxBase):
         return True
 
     def generate(self):
-        self.g_b.setText("正在执行")
+        self.g_b.setText("Generating...")
         self.g_b.setEnabled(False)
         self.g_b.repaint()
 
@@ -748,12 +866,12 @@ class PackSuperMessageBox(MessageBoxBase):
             part_list=self.get_selected_items(),
             work=self.work
         )
-        self.g_b.setText("完成")
+        self.g_b.setText("Completed")
         QTimer.singleShot(1000, self._reset_generate_button)
 
     def _reset_generate_button(self):
         try:
-            self.g_b.setText("生成LIST")
+            self.g_b.setText("Generate List")
             self.g_b.setEnabled(True)
         except Exception:
             logging.exception('Bugs')
@@ -763,10 +881,13 @@ class PackSuperMessageBox(MessageBoxBase):
         if not os.path.exists(self.work):
             return
 
+        has_oplus_parts = False
         for file_name in os.listdir(self.work):
             if file_name.endswith(".img"):
                 img_path = os.path.join(self.work, file_name)
                 name = file_name[:-4]
+                if name.startswith("my_") or name in OPLUS_PARTITIONS:
+                    has_oplus_parts = True
                 is_checked = name in self.selected
                 item_text = ""
 
@@ -780,9 +901,15 @@ class PackSuperMessageBox(MessageBoxBase):
                 if item_text:
                     item = QListWidgetItem(item_text)
                     item.setData(Qt.UserRole, name)
-                    item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+                    item.setFlags(Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled)
                     item.setCheckState(Qt.Checked if is_checked else Qt.Unchecked)
                     self.tl.addItem(item)
+
+        if has_oplus_parts and self.show_group_name.currentText() == "qti_dynamic_partitions":
+            oplus_idx = self.show_group_name.findText("oplus_dynamic_partitions")
+            if oplus_idx >= 0:
+                self.show_group_name.setCurrentIndex(oplus_idx)
+
         self.verify_size()
 
     def read_list(self):
@@ -790,12 +917,13 @@ class PackSuperMessageBox(MessageBoxBase):
         parts_info = f"{self.work}/config/parts_info"
         if os.path.exists(parts_info):
             try:
-                data: dict = utils.JsonEdit(parts_info).read().get('super_info')
-                if data is None:
-                    raise AttributeError("super_info is not dict")
+                raw_data = utils.JsonEdit(parts_info).read()
+                data = raw_data.get('super_info') if isinstance(raw_data, dict) else None
             except Exception:
-                logging.exception('PackSupper:read_parts_info')
-            else:
+                logging.exception('PackSuper:read_parts_info')
+                data = None
+
+            if isinstance(data, dict):
                 # get block device name
                 for i in data.get('block_devices', []):
                     self._block_device_name = i.get('name', 'super')
@@ -929,3 +1057,27 @@ class RepackZipMessageBox(MessageBoxBase):
     def get_device_code(self) -> str:
         """Returns the trimmed input text string from the device code line entry."""
         return self.device_code_edit.text().strip()
+
+
+class ClickableLabel(QLabel):
+    clicked = Signal()
+
+    def __init__(self, text="", parent=None):
+        super().__init__(text, parent)
+        self.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+        self.setMouseTracking(True)
+
+    def enterEvent(self, event):
+        """Show hand cursor when entering widget"""
+        self.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        """Reset cursor when leaving widget"""
+        self.setCursor(QCursor(Qt.CursorShape.ArrowCursor))
+        super().leaveEvent(event)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.clicked.emit()
+        super().mousePressEvent(event)
