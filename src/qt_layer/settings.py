@@ -37,30 +37,30 @@ class SettingsPage(QScrollArea):
         self.scrollLayout.setSpacing(20)
         self.scrollLayout.setAlignment(Qt.AlignTop)
         
-        title = TitleLabel("设置", self.scrollWidget)
+        title = TitleLabel("Settings", self.scrollWidget)
         self.scrollLayout.addWidget(title)
         # theme
         self.theme_card = OptionsSettingCard(
             qconfig.themeMode,
             FluentIcon.BRUSH,
-            "应用主题",
-            "调整你的应用外观",
-            texts=["浅色", "深色", "跟随系统设置"]
+            "Application Theme",
+            "Adjust application appearance",
+            texts=["Light", "Dark", "Use System Setting"]
         )
         self.scrollLayout.addWidget(self.theme_card)
         #languages
         self.languageCard = ComboBoxSettingCard(
             configItem=cfg.language,
             icon=FluentIcon.LANGUAGE,
-            title="语言",
-            content="调整语言",
+            title="Language",
+            content="Adjust language",
             texts=cfg.allLanguages
         )
         self.scrollLayout.addWidget(self.languageCard)
         #
-        self.workingCard = PushSettingCard(text="选择文件夹",
+        self.workingCard = PushSettingCard(text="Select Folder",
                                            icon=FluentIcon.DOWNLOAD,
-                                           title="下载目录",
+                                           title="Working Directory",
                                            content=cfg.workingFolder.value)
         self.workingCard.clicked.connect(self.change_working_folder)
         self.scrollLayout.addWidget(self.workingCard)
