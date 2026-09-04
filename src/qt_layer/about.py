@@ -61,7 +61,7 @@ class AboutPage(QWidget):
         self.title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         header_layout.addWidget(self.title)
 
-        subtitle = BodyLabel("- 专注于安卓ROM修改 -")
+        subtitle = BodyLabel("- Focused on Android ROM Customization -")
         subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
         header_layout.addWidget(subtitle)
 
@@ -81,15 +81,15 @@ class AboutPage(QWidget):
         left_layout.setContentsMargins(32, 32, 32, 32)
         left_layout.setSpacing(20)
 
-        sys_header = CaptionLabel("系统信息")
+        sys_header = CaptionLabel("System Information")
         sys_header.setStyleSheet("color: #38B6FF; font-weight: 700; font-size: 14px;")
         left_layout.addWidget(sys_header)
 
         sys_info_data = [
-            ("工具版本", "4.2.1"),
-            ("Python库版本", "3.14.6"),
-            ("操作系统", "Linux"),
-            ("指令集", "x86_64")
+            ("Toolkit Version", "4.2.1"),
+            ("Python Version", "3.13"),
+            ("Operating System", "Linux"),
+            ("Architecture", "x86_64")
         ]
 
         sys_grid = QGridLayout()
@@ -120,7 +120,7 @@ class AboutPage(QWidget):
         right_layout.setContentsMargins(32, 32, 32, 32)
         right_layout.setSpacing(20)
 
-        dep_header = CaptionLabel("依赖项")
+        dep_header = CaptionLabel("Dependencies")
         dep_header.setStyleSheet("color: #38B6FF; font-weight: 700; font-size: 14px;")
         right_layout.addWidget(dep_header)
 
@@ -160,10 +160,10 @@ class AboutPage(QWidget):
         footer_layout.setSpacing(10)
         footer_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        credit_lbl = BodyLabel("Chinese-Simplified By 寒风居士")
+        credit_lbl = BodyLabel("Created by ColdWindScholar")
         credit_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        slogan_lbl = BodyLabel("开源 / 自由 / 极速")
+        slogan_lbl = BodyLabel("Open Source / Free / Fast")
         slogan_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         slogan_lbl.setStyleSheet("color: #38B6FF; font-weight: 700; font-size: 13px;")
 
@@ -171,7 +171,7 @@ class AboutPage(QWidget):
         github_lbl.setText("GitHub: MIO-KITCHEN-SOURCE")
         github_lbl.setUrl("https://github.com/ColdWindScholar/MIO-KITCHEN-SOURCE")
 
-        copyright_lbl = CaptionLabel("© 2026 寒风居士版权所有")
+        copyright_lbl = CaptionLabel("© 2026 ColdWindScholar. All rights reserved.")
         copyright_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         footer_layout.addWidget(credit_lbl)
