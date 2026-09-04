@@ -1238,25 +1238,25 @@ class PluginPage(QWidget):
         text_header_layout = QVBoxLayout()
         text_header_layout.setSpacing(4)
 
-        title = TitleLabel("插件")
-        description = CaptionLabel("单击右键以显示菜单，或在此启动您的功能模块", self)
+        title = TitleLabel("Plugins")
+        description = CaptionLabel("Right click to show menu, or launch your modules here", self)
 
         text_header_layout.addWidget(title)
         text_header_layout.addWidget(description)
         header_layout.addLayout(text_header_layout)
         header_layout.addStretch()
-        self.local_install_btn = PushButton(FluentIcon.ADD, "本地安装", self)
+        self.local_install_btn = PushButton(FluentIcon.ADD, "Install MPK", self)
         self.local_install_btn.clicked.connect(self.install_mpk)
         header_layout.addWidget(self.local_install_btn)
 
         # New Feature: Cloud Download Module Control Trigger
-        self.download_btn = PushButton(FluentIcon.DOWNLOAD, "网络下载", self)
+        self.download_btn = PushButton(FluentIcon.DOWNLOAD, "Download", self)
         header_layout.addWidget(self.download_btn)
         outer_layout.addLayout(header_layout)
 
         # 3. Search Bar Integration
         self.search_bar = SearchLineEdit(self)
-        self.search_bar.setPlaceholderText("搜索已安装的插件...")
+        self.search_bar.setPlaceholderText("Search installed plugins...")
         self.search_bar.setClearButtonEnabled(True)
         self.search_bar.textChanged.connect(self.filter_plugins)
         outer_layout.addWidget(self.search_bar)
