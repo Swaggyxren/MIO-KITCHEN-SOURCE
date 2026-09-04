@@ -4,13 +4,13 @@
         "autoUnpack": false,
         "checkUpdate": false,
         "CpioImpl": "Native",
-        "currentProjectName": "lineage-23.2-20260506-UNOFFICIAL-stone",
-        "Language": "Indonesian",
+        "currentProjectName": "",
+        "Language": "English",
         "pluginRepo": "https://raw.githubusercontent.com/ColdWindScholar/MPK_Plugins/main/",
         "ProjectStructure": "Single",
         "selinuxPatch": false,
         "updateURL": "https://api.github.com/repos/ColdWindScholar/MIO-KITCHEN-SOURCE/releases/latest",
-        "WorkingFolder": "/home/xzz/PycharmProjects/MIO-KITCHEN-SOURCE"
+        "WorkingFolder": ""
     },
     "QFluentWidgets": {
         "FontFamilies": [
@@ -19,6 +19,6 @@
             "PingFang SC"
         ],
         "ThemeColor": "#ff0078d4",
-        "ThemeMode": "Dark"
+        "ThemeMode": "Auto"
     }
 }
