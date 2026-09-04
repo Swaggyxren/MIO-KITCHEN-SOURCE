@@ -55,8 +55,12 @@ def context_patch(fs_file, dir_path, fix_permission: dict) -> tuple:  # 接收�
     new_fs = {}
     r_new_fs = {}
     add_new = 0
-    print(f"ContextPatcher: the Original File Has {len(fs_file.keys()):d} entries")
-    permission_d = 'u:object_r:system_file:s0'
+    part_name = os.path.basename(os.path.abspath(dir_path)).lower()
+    if 'vendor' in part_name or 'odm' in part_name:
+        permission_d = 'u:object_r:vendor_file:s0'
+    else:
+        permission_d = 'u:object_r:system_file:s0'
+
     for i in scan_dir(os.path.abspath(dir_path)):
         if not i.isprintable():
             i = ''.join([c if c.isprintable() or not c.strip(' ') else '*' for c in i])
@@ -75,7 +79,10 @@ def context_patch(fs_file, dir_path, fix_permission: dict) -> tuple:  # 接收�
                         permission = fix_permission.get(f)
                 #upper
                 if not permission:
-                    permission = permission_d
+                    if ('vendor' in part_name or 'odm' in part_name) and ('/bin/' in i or i.endswith('/bin')):
+                        permission = 'u:object_r:vendor_qti_init_shell_exec:s0'
+                    else:
+                        permission = permission_d
             if " " in permission:
                 permission = permission.replace(' ', '*')
             print(f"ADD [{i} {permission}]")
