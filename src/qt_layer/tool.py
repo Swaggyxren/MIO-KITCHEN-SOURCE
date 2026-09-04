@@ -10,9 +10,16 @@ from PySide6.QtWidgets import QApplication
 from qfluentwidgets import (NavigationItemPosition, SplashScreen, setTheme, Theme,
                             FluentWindow, FluentIcon as FIF)
 
-from qt_layer.plugins import PluginPage
-from qt_layer.projects import ProjectsPage
-from qt_layer.settings import SettingsPage
+_src_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_root_dir = os.path.dirname(_src_dir)
+_core_dir = os.path.join(_src_dir, "core")
+for _p in (_root_dir, _src_dir, _core_dir):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
+from src.qt_layer.plugins import PluginPage
+from src.qt_layer.projects import ProjectsPage
+from src.qt_layer.settings import SettingsPage
 from src.qt_layer.about import AboutPage
 from src.qt_layer.home import HomePage
 from utils import temp, v_code
@@ -20,6 +27,63 @@ from utils import temp, v_code
 if sys.platform == "linux" or sys.platform == "linux2":
     if os.environ.get("XDG_SESSION_TYPE") == "wayland":
         os.environ["QT_QPA_PLATFORM"] = "xcb"
+
+    # Patch QFluentWidgets popup menus on Linux to eliminate black box artifacts and mask glitches
+    try:
+        from qfluentwidgets import RoundMenu, MenuAnimationType
+        from qfluentwidgets.components.widgets.combo_box import ComboBox
+        from PySide6.QtGui import QAction
+
+        old_round_menu_init = RoundMenu._RoundMenu__initWidgets
+
+        def linux_round_menu_init(self):
+            old_round_menu_init(self)
+            self.view.setGraphicsEffect(None)
+            self.hBoxLayout.setContentsMargins(2, 2, 2, 2)
+
+        RoundMenu._RoundMenu__initWidgets = linux_round_menu_init
+
+        old_round_menu_exec = RoundMenu.exec
+
+        def linux_round_menu_exec(self, pos, ani=True, aniType=MenuAnimationType.DROP_DOWN):
+            self.view.setGraphicsEffect(None)
+            self.hBoxLayout.setContentsMargins(2, 2, 2, 2)
+            return old_round_menu_exec(self, pos, ani=False, aniType=MenuAnimationType.NONE)
+
+        RoundMenu.exec = linux_round_menu_exec
+
+        def linux_show_combo_menu(self):
+            if not self.items:
+                return
+
+            menu = self._createComboMenu()
+            for item in self.items:
+                action = QAction(item.icon, item.text)
+                action.setEnabled(item.isEnabled)
+                menu.addAction(action)
+
+            menu.view.itemClicked.connect(lambda i: self._onItemClicked(self.findText(i.text().lstrip())))
+
+            if menu.view.width() < self.width():
+                menu.view.setMinimumWidth(self.width())
+                menu.adjustSize()
+
+            menu.setMaxVisibleItems(self.maxVisibleItems())
+            menu.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+            menu.closedSignal.connect(self._onDropMenuClosed)
+            self.dropMenu = menu
+
+            if self.currentIndex() >= 0 and self.items:
+                menu.setDefaultAction(menu.actions()[self.currentIndex()])
+
+            menu.view.setGraphicsEffect(None)
+            menu.hBoxLayout.setContentsMargins(2, 2, 2, 2)
+            pos = self.mapToGlobal(QPoint(0, self.height() + 2))
+            menu.exec(pos, ani=False, aniType=MenuAnimationType.NONE)
+
+        ComboBox._showComboMenu = linux_show_combo_menu
+    except Exception as e:
+        logging.warning(f"Could not apply Linux menu patch: {e}")
 
 class TitleBarEventFilter(QObject):
     """Event filter for title bar dragging"""
@@ -67,7 +131,9 @@ class MainWindow(FluentWindow):
         # 设置主题
         setTheme(Theme.AUTO)
 
-        self.setWindowIcon(QIcon('icon.ico'))
+        # Prototype logo (accent blue badge with crisp bold white 'M')
+        logo_path = 'bin/logo.png' if os.path.exists('bin/logo.png') else 'icon.ico'
+        self.setWindowIcon(QIcon(logo_path))
         
         # Create splash screen with error handling
         try:
@@ -82,6 +148,11 @@ class MainWindow(FluentWindow):
 
         # 设置窗口标题
         self.setWindowTitle("MIO-KITCHEN")
+
+        # Title bar styling matching prototype layout
+        self.titleBar.setIcon(self.windowIcon())
+        self.titleBar.hBoxLayout.setContentsMargins(12, 0, 0, 0)
+        self.titleBar.hBoxLayout.setSpacing(8)
 
         # 设置窗口大小
         self.resize(1000, 700)
@@ -117,18 +188,50 @@ class MainWindow(FluentWindow):
         self.move(x, y)
 
     def initNavigation(self):
-        # 添加导航项
-        self.addSubInterface(self.home_page, FIF.HOME, '主页')
-        self.addSubInterface(self.project_page, FIF.DOCUMENT, '项目')
-        self.addSubInterface(self.plugin_page, FIF.APPLICATION, '插件')
-        self.addSubInterface(self.about_page, FIF.INFO, '关于', NavigationItemPosition.BOTTOM)
-        self.addSubInterface(self.settings_page, FIF.SETTING, '设置', NavigationItemPosition.BOTTOM)
+        # Add navigation items
+        self.addSubInterface(self.home_page, FIF.HOME, 'Home')
+        self.addSubInterface(self.project_page, FIF.DOCUMENT, 'Projects')
+        self.addSubInterface(self.plugin_page, FIF.APPLICATION, 'Plugins')
+        self.addSubInterface(self.about_page, FIF.INFO, 'About', NavigationItemPosition.BOTTOM)
+        self.addSubInterface(self.settings_page, FIF.SETTING, 'Settings', NavigationItemPosition.BOTTOM)
 
-        # 默认显示主页
+        # Connect Home page quick launchpad actions
+        self.home_page.quick_open_project.connect(lambda: self.switchTo(self.project_page))
+        self.home_page.quick_new_project.connect(self._on_quick_new_project)
+        self.home_page.quick_unpack_file.connect(self._on_quick_unpack_file)
+        self.home_page.quick_manage_plugins.connect(lambda: self.switchTo(self.plugin_page))
+
+        # Default display Home
         self.switchTo(self.home_page)
+
+    def switchTo(self, interface):
+        super().switchTo(interface)
+        name = interface.objectName() if hasattr(interface, 'objectName') else str(interface)
+        print(f"[NAVIGATE] Switched to view: {name}", flush=True)
+        logging.info(f"[NAVIGATE] Switched to view: {name}")
+
+    def _on_quick_new_project(self):
+        print("[ACTION] Triggered Quick Action: New Project", flush=True)
+        self.switchTo(self.project_page)
+        self.project_page.show_create_dialog()
+
+    def _on_quick_unpack_file(self):
+        print("[ACTION] Triggered Quick Action: Unpack File", flush=True)
+        from PySide6.QtWidgets import QFileDialog
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select ROM or Partition Image",
+            "",
+            "ROM Files (*.zip *.bin *.img *.ozip *.ofp *.ops *.pac *.cpb *.tar *.kdz);;All Files (*)"
+        )
+        if file_path:
+            print(f"[ACTION] Selected ROM file to unpack: {file_path}", flush=True)
+            self.switchTo(self.project_page)
+            self.project_page.dndfile([file_path])
 
 
 def __init__qt(args):
+    os.makedirs(temp, exist_ok=True)
     tool_log = f'{temp}/{time.strftime("%Y%m%d_%H-%M-%S", time.localtime())}_{v_code()}.log'
     QApplication.setHighDpiScaleFactorRoundingPolicy(
         Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
@@ -137,10 +240,34 @@ def __init__qt(args):
     QApplication.setAttribute(Qt.ApplicationAttribute.AA_UseHighDpiPixmaps)
 
     app = QApplication(args)
-    logging.basicConfig(level=logging.DEBUG, format='%(levelname)s:%(asctime)s:%(filename)s:%(name)s:%(message)s',
-                        filename=tool_log, filemode='w')
+
+    # Configure dual-output verbose logging (stdout + file)
+    stdout_handler = logging.StreamHandler(sys.stdout)
+    stdout_handler.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('[%(asctime)s] [%(levelname)s] [%(name)s] %(message)s', '%H:%M:%S')
+    stdout_handler.setFormatter(formatter)
+
+    file_handler = logging.FileHandler(tool_log, mode='w', encoding='utf-8')
+    file_handler.setLevel(logging.DEBUG)
+    file_handler.setFormatter(formatter)
+
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.DEBUG)
+    root_logger.addHandler(stdout_handler)
+    root_logger.addHandler(file_handler)
+
+    print("==================================================", flush=True)
+    print("=== MIO-KITCHEN Verbose Engine Started ===", flush=True)
+    print(f"=== Log File: {tool_log} ===", flush=True)
+    print("==================================================", flush=True)
+
     window = MainWindow()
     window.show()
+    try:
+        import pyi_splash
+        pyi_splash.close()
+    except ImportError:
+        pass
     sys.exit(app.exec())
 
 
