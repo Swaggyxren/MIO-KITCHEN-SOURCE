@@ -1022,3 +1022,26 @@ class ModuleErrorCodes(IntEnum):
     ArchNotSupported = 4
     # GenericError is not recommended.
     GenericError = 9
+
+
+def merge_sparse_chunks(work_dir: str, partition_name: str) -> bool:
+    """
+    Detects Motorola / Qualcomm fastboot sparse chunk sequences (e.g., super.img_sparsechunk.0,
+    super_sparsechunk.0, system.img_sparsechunk.0) and merges them into partition_name.img using simg2img.
+    Inspired by Danda420/RomTools sparse chunk merge.
+    """
+    pattern = re.compile(rf'^{re.escape(partition_name)}(\.img)?(_sparsechunk|sparse_chunk|\.chunk|\.img)?\.\d+$', re.IGNORECASE)
+    chunks = [f for f in os.listdir(work_dir) if pattern.match(f) and os.path.isfile(os.path.join(work_dir, f))]
+    if not chunks:
+        return False
+
+    chunks.sort(key=lambda s: [int(t) if t.isdigit() else t.lower() for t in re.split(r'(\d+)', s)])
+    full_chunk_paths = [os.path.join(work_dir, c) for c in chunks]
+    out_path = os.path.join(work_dir, f"{partition_name}.img")
+
+    print(f"Merging {len(chunks)} sparse chunks into {partition_name}.img...")
+    ret = call(['simg2img', *full_chunk_paths, out_path])
+    if ret == 0 and os.path.exists(out_path):
+        print(f"Successfully merged {partition_name}.img ({len(chunks)} chunks).")
+        return True
+    return False
