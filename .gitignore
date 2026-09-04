@@ -1,11 +1,23 @@
 # Built files
-MIO-KITCHEN-win.zip
+*.zip
 bin/configs.json
 build/
 dist/
-src/__pycache__/
-src/core/__pycache__/
-src/core/ntpiutils/__pycache__/
-src/porttool/__pycache__/
-src/tkui/__pycache__/
 tool.spec
+body.md
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*/__pycache__/
+*/*/__pycache__/
+*/*/*/__pycache__/
+
+# Project temp and working directories
+.venv/
+venv/
+bin/temp/
+workspace/
+.ua/
+*.bak
