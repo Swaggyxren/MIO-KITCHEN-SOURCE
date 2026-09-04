@@ -27,10 +27,7 @@ from pip._internal.cli.main import main as _main
 class Builder:
     def __init__(self):
         ostype = system()
-        try:
-            from tkinter import END
-        except:
-            raise FileNotFoundError("Tkinter is not exist!\nThe dist may not Work!")
+
         if ostype == 'Linux':
             name = 'MIO-KITCHEN-linux.zip'
         elif ostype == 'Darwin':
@@ -91,10 +88,12 @@ class Builder:
             f.write(f'ver={ver}\n')
 
     def unit_test(self):
-        from src.tool_tester import test_main, Test
-
-        if Test:
-            test_main(exit=False)
+        import unittest
+        suite = unittest.defaultTestLoader.loadTestsFromName('src.tool_tester')
+        runner = unittest.TextTestRunner()
+        result = runner.run(suite)
+        if not result.wasSuccessful():
+            raise RuntimeError("Unit tests failed!")
 
     def install_package(self):
         with open('requirements.txt', 'r', encoding='utf-8') as l:
@@ -120,18 +119,14 @@ class Builder:
                 'numpy',
                 '-i',
                 'icon.ico',
-                '--collect-data',
-                'sv_ttk',
-                '--collect-data',
-                'chlorophyll',
+                '--collect-all',
+                'qfluentwidgets',
                 '--collect-data',
                 'androguard',
                 '--hidden-import',
-                'tkinter',
+                'PySide6',
                 '--hidden-import',
-                'PIL',
-                '--hidden-import',
-                'PIL._tkinter_finder'
+                'PIL'
             ])
         elif os.name == 'posix':
             if self.ostype == 'Linux':
@@ -148,18 +143,14 @@ class Builder:
                 'numpy',
                 '-i',
                 'icon.ico',
-                '--collect-data',
-                'sv_ttk',
-                '--collect-data',
-                'chlorophyll',
+                '--collect-all',
+                'qfluentwidgets',
                 '--collect-data',
                 'androguard',
                 '--hidden-import',
-                'tkinter',
+                'PySide6',
                 '--hidden-import',
                 'PIL',
-                '--hidden-import',
-                'PIL._tkinter_finder',
                 '--splash',
                 'splash_loongarch.png' if platform.machine() == 'loongarch64' else 'splash.png'
             ])
@@ -179,12 +170,14 @@ class Builder:
                 'numpy',
                 '-i',
                 'icon.ico',
-                '--collect-data',
-                'sv_ttk',
-                '--collect-data',
-                'chlorophyll',
+                '--collect-all',
+                'qfluentwidgets',
                 '--collect-data',
                 'androguard',
+                '--hidden-import',
+                'PySide6',
+                '--hidden-import',
+                'PIL',
                 '--splash',
                 'splash.png'
             ])
@@ -193,8 +186,12 @@ class Builder:
     def config_folder(self):
         if not os.path.exists('dist/bin'):
             os.makedirs('dist/bin', exist_ok=True)
-        while_list = ['images', 'languages', 'licenses', 'module', 'temp', 'extra_flash', 'setting.ini', self.ostype,
-                      'kemiaojiang.png', 'License_kemiaojiang.txt', "tkdnd", 'help_document.json', "exec.sh", 'update.json']
+        while_list = [
+            'images', 'languages', 'licenses', 'module', 'temp', 'extra_flash', 'setting.ini', self.ostype,
+            'kemiaojiang.png', 'License_kemiaojiang.txt', 'tkdnd', 'help_document.json', 'exec.sh', 'update.json',
+            'settings.json', 'context_rules.json', 'update-binary', 'keys', 'config', 'Android',
+            'logo.png', 'logo_18.png', 'logo_32.png', 'logo_64.png'
+        ]
         for i in os.listdir(self.local + "/bin"):
             if i in while_list:
                 if os.path.isdir(f"{self.local}/bin/{i}"):
@@ -203,7 +200,7 @@ class Builder:
                     shutil.copy(f"{self.local}/bin/{i}", f"{self.local}/dist/bin/{i}")
         if not os.path.exists('dist/LICENSE'):
             shutil.copy(f'{self.local}/LICENSE', f"{self.local}/dist/LICENSE")
-        if self.dndplat:
+        if os.path.exists(f"{self.local}/dist/bin/tkdnd") and self.dndplat:
             for i in os.listdir(f"{self.local}/dist/bin/tkdnd"):
                 if i[:3] == self.dndplat[:3] and i.endswith("x64") and self.dndplat.endswith('x86'):
                     continue
@@ -211,8 +208,6 @@ class Builder:
                     continue
                 if os.path.isdir(f"{self.local}/dist/bin/tkdnd/{i}"):
                     shutil.rmtree(f'{self.local}/dist/bin/tkdnd/{i}', ignore_errors=True)
-        else:
-            raise FileNotFoundError("Cannot Build!!!TkinterDnd2 Missing!!!!!!!!!!")
         if os.name == 'posix':
             if platform.machine() == 'x86_64' and os.path.exists(f'{self.local}/dist/bin/Linux/aarch64'):
                 try:
@@ -221,8 +216,9 @@ class Builder:
                     print(e)
             for root, dirs, files in os.walk(f'{self.local}/dist', topdown=True):
                 for i in files:
-                    print(f"Chmod {os.path.join(root, i)}")
-                    os.chmod(os.path.join(root, i), 0o7777, follow_symlinks=False)
+                    target_file = os.path.join(root, i)
+                    mode = 0o755 if (root.endswith('/bin') or os.access(target_file, os.X_OK)) else 0o644
+                    os.chmod(target_file, mode, follow_symlinks=False)
 
     def pack_zip(self, source, name):
         abs_folder_path = os.path.abspath(source)
