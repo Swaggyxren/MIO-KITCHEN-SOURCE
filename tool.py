@@ -27,7 +27,14 @@ if sys.version_info.major == 3:
     if sys.version_info.minor < 8:
         input(
             f"Not supported: [{sys.version}] yet\nEnter to quit\nSorry for any inconvenience caused")
-        sys.exit(1)
+import os
+_root = os.path.dirname(os.path.abspath(__file__))
+_src = os.path.join(_root, "src")
+_core = os.path.join(_src, "core")
+for _dir in (_root, _src, _core):
+    if _dir not in sys.path:
+        sys.path.insert(0, _dir)
+
 try:
     from src.qt_layer.tool import *
 except Exception as e:
