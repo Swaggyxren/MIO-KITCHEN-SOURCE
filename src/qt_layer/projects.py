@@ -1339,9 +1339,9 @@ class ProjectsPage(QWidget):
                  "extra_attr,compression,ro" if readonly else 'extra_attr,inode_checksum,sb_checksum,compression', "-U",
                  part_uuid, '-T', str(UTC), f"{work_output}/{name}.img", '-f']):
             return 1
-        # The efficiency of verifying and adding file contexts has been improved.
+        # The efficiency of verifying and adding file contexts has been improved (RomTools optimization).
         # Let's confirm that the basic context for the partition is present.
-        line_to_ensure = f'/{name}/{name} u:object_r:system_file:s0\n'
+        line_to_ensure = f'/{name} u:object_r:system_file:s0\n'
         file_contexts_path = f'{work}/config/{name}_file_contexts'
 
         found = False
@@ -1355,9 +1355,11 @@ class ProjectsPage(QWidget):
         if not found:
             with open(file_contexts_path, 'a', encoding='utf-8') as f_append:
                 f_append.write(line_to_ensure)
+        # RomTools: System partition mountpoint is / (system-as-root), other partitions are /<name>
+        mountpoint = "" if name in ['system', 'system_a', 'system_b'] else name
         return call(['sload.f2fs', '-d', '0', '-c' if compress else '', '-r' if readonly else '', '-C',
                      f'{work}/config/{name}_fs_config', '-f', work + name, '-p', f'{work_output}/{name}.img', '-s',
-                     f'{work}/config/{name}_file_contexts', '-t', f'/{name}', '-T', str(UTC),
+                     f'{work}/config/{name}_file_contexts', '-t', f'/{mountpoint}', '-T', str(UTC),
                      f'{work_output}/{name}.img'])
 
     def mke2fs(self, name: str, work: str, sparse: bool, work_output: str, size: int = 0, UTC: int = None):
@@ -1505,18 +1507,20 @@ class ProjectsPage(QWidget):
                         logging.exception('Bugs')
                 fspatch.main(work + dname, os.path.join(f"{work}/config", f"{dname}_fs_config"))
                 utils.remove_duplicate(f"{work}/config/{dname}_fs_config")
+                if fs_conver:
+                    if parts_dict[dname] == origin_fs:
+                        parts_dict[dname] = modify_fs
+                target_fstype = parts_dict.get(dname, 'ext4')
                 contexts_file = f"{work}/config/{dname}_file_contexts"
                 if os.path.exists(contexts_file):
+                    rule_file = context_rule_file if cfg.selinuxPatch.value else None
+                    contextpatch.main(work + dname, contexts_file, rule_file, fstype=target_fstype)
                     if cfg.selinuxPatch.value:
-                        contextpatch.main(work + dname, contexts_file, context_rule_file)
                         new_rules = contextpatch.scan_context(contexts_file)
                         rules = utils.JsonEdit(context_rule_file)
                         rules.write(new_rules | rules.read())
 
                     utils.remove_duplicate(contexts_file)
-                if fs_conver:
-                    if parts_dict[dname] == origin_fs:
-                        parts_dict[dname] = modify_fs
                 if parts_dict[dname] == 'erofs':
                     if self.mkerofs(dname, str(erofs_compress_format), work=work,
                                     work_output=project_manger.current_work_output_path(), level=int(scale_erofs),
