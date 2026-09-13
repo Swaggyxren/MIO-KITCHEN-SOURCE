@@ -11,8 +11,8 @@ from qfluentwidgets import InfoBar, InfoBarPosition, ListWidget, CheckBox, LineE
 from qfluentwidgets import (MessageBoxBase, SwitchButton, Slider,
                             CaptionLabel)
 
-import utils
-from utils import gettype
+from src.core import utils
+from src.core.utils import gettype
 
 
 def show_info_bar(parent, title, content, bar_type: int = 3, duration=3000):
