@@ -107,27 +107,38 @@ class Builder:
     def pyinstaller_build(self):
         import PyInstaller.__main__
         dndplat = self.dndplat
+        base_args = [
+            'tool.py',
+            '-Fw',
+            '--exclude-module',
+            'numpy',
+            '-i',
+            'icon.ico',
+            '--paths',
+            '.',
+            '--paths',
+            'src',
+            '--paths',
+            'src/core',
+            '--paths',
+            'src/qt_layer',
+            '--collect-submodules',
+            'src',
+            '--collect-all',
+            'qfluentwidgets',
+            '--collect-data',
+            'androguard',
+            '--hidden-import',
+            'PySide6',
+            '--hidden-import',
+            'PIL'
+        ]
+
         if self.ostype == 'Darwin':
             if platform.machine() == 'x86_64':
                 dndplat = 'osx-x64'
             elif platform.machine() == 'arm64':
                 dndplat = 'osx-arm64'
-            PyInstaller.__main__.run([
-                'tool.py',
-                '-Fw',
-                '--exclude-module',
-                'numpy',
-                '-i',
-                'icon.ico',
-                '--collect-all',
-                'qfluentwidgets',
-                '--collect-data',
-                'androguard',
-                '--hidden-import',
-                'PySide6',
-                '--hidden-import',
-                'PIL'
-            ])
         elif os.name == 'posix':
             if self.ostype == 'Linux':
                 if platform.machine() == 'x86_64':
@@ -136,24 +147,6 @@ class Builder:
                     dndplat = 'linux-arm64'
                 elif platform.machine() == 'loongarch64':
                     dndplat = 'linux-loongarch64'
-            PyInstaller.__main__.run([
-                'tool.py',
-                '-Fw',
-                '--exclude-module',
-                'numpy',
-                '-i',
-                'icon.ico',
-                '--collect-all',
-                'qfluentwidgets',
-                '--collect-data',
-                'androguard',
-                '--hidden-import',
-                'PySide6',
-                '--hidden-import',
-                'PIL',
-                '--splash',
-                'splash_loongarch.png' if platform.machine() == 'loongarch64' else 'splash.png'
-            ])
         elif os.name == 'nt':
             mach_ = platform.machine()
             platform.machine = lambda: 'x86' if platform.architecture()[0] == '32bit' and mach_ == 'AMD64' else mach_
@@ -163,24 +156,10 @@ class Builder:
                 dndplat = 'win-x64'
             elif platform.machine() == 'ARM64':
                 dndplat = 'win-arm64'
-            PyInstaller.__main__.run([
-                'tool.py',
-                '-Fw',
-                '--exclude-module',
-                'numpy',
-                '-i',
-                'icon.ico',
-                '--collect-all',
-                'qfluentwidgets',
-                '--collect-data',
-                'androguard',
-                '--hidden-import',
-                'PySide6',
-                '--hidden-import',
-                'PIL',
-                '--splash',
-                'splash.png'
-            ])
+        if os.path.exists('tool.spec'):
+            PyInstaller.__main__.run(['tool.spec', '--noconfirm'])
+        else:
+            PyInstaller.__main__.run(base_args)
         self.dndplat = dndplat
 
     def config_folder(self):
