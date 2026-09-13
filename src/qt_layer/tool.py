@@ -112,26 +112,85 @@ if sys.platform == "linux" or sys.platform == "linux2":
     except Exception as e:
         logging.warning(f"Could not apply Linux menu patch: {e}")
 
-# Patch QFluentWidgets TableItemDelegate to eliminate duplicate checkbox rendering on TableWidget & ListWidget
+# Patch QFluentWidgets TableItemDelegate to eliminate duplicate checkbox rendering and properly offset text
 try:
     from qfluentwidgets.components.widgets.table_view import TableItemDelegate
+    from qfluentwidgets.common.style_sheet import isDarkTheme
     from PySide6.QtWidgets import QStyleOptionViewItem
+    from PySide6.QtGui import QPainter, QColor
 
-    old_table_init_style = TableItemDelegate.initStyleOption
+    old_table_paint = TableItemDelegate.paint
 
-    def patched_table_init_style(self, option, index):
-        old_table_init_style(self, option, index)
-        # Suppress duplicate native Qt check indicator; Fluent checkbox is drawn by self._drawCheckBox
-        if index.data(Qt.ItemDataRole.CheckStateRole) is not None:
-            option.features &= ~QStyleOptionViewItem.ViewItemFeature.HasCheckIndicator
+    def patched_table_paint(self, painter, option, index):
+        if index.data(Qt.ItemDataRole.CheckStateRole) is None:
+            return old_table_paint(self, painter, option, index)
 
-    TableItemDelegate.initStyleOption = patched_table_init_style
+        painter.save()
+        painter.setPen(Qt.NoPen)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setClipping(True)
+        painter.setClipRect(option.rect)
+
+        opt = QStyleOptionViewItem(option)
+        opt.rect.adjust(0, self.margin, 0, -self.margin)
+
+        # Draw row highlight / alternating background
+        isHover = self.hoverRow == index.row()
+        isPressed = self.pressedRow == index.row()
+        isAlternate = index.row() % 2 == 0 and self.parent().alternatingRowColors()
+        isDark = isDarkTheme()
+
+        c = 255 if isDark else 0
+        alpha = 0
+        if index.row() not in self.selectedRows:
+            if isPressed:
+                alpha = 9 if isDark else 6
+            elif isHover:
+                alpha = 12
+            elif isAlternate:
+                alpha = 5
+        else:
+            if isPressed:
+                alpha = 15 if isDark else 9
+            elif isHover:
+                alpha = 25
+            else:
+                alpha = 17
+
+        if index.data(Qt.ItemDataRole.BackgroundRole):
+            painter.setBrush(index.data(Qt.ItemDataRole.BackgroundRole))
+        else:
+            painter.setBrush(QColor(c, c, c, alpha))
+
+        self._drawBackground(painter, opt, index)
+
+        if index.row() in self.selectedRows and index.column() == 0 and self.parent().horizontalScrollBar().value() == 0:
+            self._drawIndicator(painter, opt, index)
+
+        # Draw Fluent checkbox
+        self._drawCheckBox(painter, opt, index)
+        painter.restore()
+
+        # Draw text/icon (if present) offset past the checkbox, without drawing the native Qt checkbox
+        has_content = bool(index.data(Qt.ItemDataRole.DisplayRole) or index.data(Qt.ItemDataRole.DecorationRole))
+        if has_content:
+            text_opt = QStyleOptionViewItem(option)
+            self.initStyleOption(text_opt, index)
+            text_opt.features &= ~QStyleOptionViewItem.ViewItemFeature.HasCheckIndicator
+            # Checkbox ends at option.rect.x() + 34; indent text so it begins cleanly after it
+            text_opt.rect.setLeft(option.rect.x() + 42)
+            super(TableItemDelegate, self).paint(painter, text_opt, index)
+
+    TableItemDelegate.paint = patched_table_paint
 
     def patched_table_editor_event(self, event, model, option, index):
-        if event.type() == QEvent.Type.MouseButtonRelease and event.button() == Qt.MouseButton.LeftButton:
-            if index.flags() & Qt.ItemFlag.ItemIsUserCheckable:
-                state = index.data(Qt.ItemDataRole.CheckStateRole)
-                if state is not None:
+        if index.flags() & Qt.ItemFlag.ItemIsUserCheckable:
+            state = index.data(Qt.ItemDataRole.CheckStateRole)
+            if state is not None:
+                if event.type() in (QEvent.Type.MouseButtonPress, QEvent.Type.MouseButtonDblClick):
+                    if event.button() == Qt.MouseButton.LeftButton:
+                        return True
+                elif event.type() == QEvent.Type.MouseButtonRelease and event.button() == Qt.MouseButton.LeftButton:
                     new_state = Qt.CheckState.Unchecked if (state == Qt.CheckState.Checked or state == 2) else Qt.CheckState.Checked
                     model.setData(index, new_state, Qt.ItemDataRole.CheckStateRole)
                     return True
