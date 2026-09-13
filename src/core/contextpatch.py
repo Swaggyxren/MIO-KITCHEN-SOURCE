@@ -64,9 +64,6 @@ def scan_dir(folder, fstype: str = 'ext4') -> Generator[Union[str, Any], Optiona
 
 
 def str_to_selinux(string: str, fstype: str = 'ext4') -> str:
-    if fstype == 'erofs':
-        # EROFS uses literal path/prefix matching; do not regex-escape
-        return string
     if string.endswith('(/.*)?'):
         return string
     return escape(string).replace('\\-', '-')
