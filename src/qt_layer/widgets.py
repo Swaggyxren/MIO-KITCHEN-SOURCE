@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QGridLayout,
 from qfluentwidgets import InfoBar, InfoBarPosition, ListWidget, CheckBox, LineEdit, ComboBox, SubtitleLabel, \
     RadioButton, PushButton, BodyLabel
 from qfluentwidgets import (MessageBoxBase, SwitchButton, Slider,
-                            CaptionLabel)
+                            CaptionLabel, SingleDirectionScrollArea)
 
 from src.core import utils
 from src.core.utils import gettype
@@ -391,16 +391,26 @@ class PackSettingsDialog(MessageBoxBase):
         self.viewLayout.addWidget(self.titleLabel)
         self.viewLayout.addWidget(self.subtitleLabel)
 
-        # Custom content container
-        self.content_widget = QWidget(self)
+        # Custom content container inside SingleDirectionScrollArea to prevent vertical clipping/squishing
+        self.content_widget = QWidget()
         self.initCustomUI()
-        self.viewLayout.addWidget(self.content_widget)
+
+        self.scroll_area = SingleDirectionScrollArea(self.widget)
+        self.scroll_area.setWidget(self.content_widget)
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+        self.scroll_area.enableTransparentBackground()
+
+        parent_h = parent.height() if parent else 700
+        dialog_max_h = max(380, min(parent_h - 180, 520))
+        self.scroll_area.setFixedHeight(dialog_max_h)
+        self.viewLayout.addWidget(self.scroll_area)
 
         # Action buttons
         self.yesButton.setText("Pack")
         self.cancelButton.setText("Cancel")
 
-        self.widget.setMinimumWidth(640)
+        self.widget.setMinimumWidth(680)
 
     def _field_lbl(self, text, parent):
         lbl = QLabel(text, parent)
@@ -497,11 +507,13 @@ class PackSettingsDialog(MessageBoxBase):
         # Slider row
         erofs_slider_row = QHBoxLayout()
         erofs_slider_row.setSpacing(12)
+        erofs_slider_row.setContentsMargins(0, 4, 0, 4)
         self.erofs_level_label = QLabel("EROFS Level: 8", fs_card)
-        self.erofs_level_label.setStyleSheet("color: #e4e4e7; font-size: 13px; font-weight: 500; min-width: 105px;")
+        self.erofs_level_label.setStyleSheet("color: #e4e4e7; font-size: 13px; font-weight: 500; min-width: 110px;")
         self.erofs_slider = Slider(Qt.Orientation.Horizontal, fs_card)
         self.erofs_slider.setRange(0, 20)
         self.erofs_slider.setValue(8)
+        self.erofs_slider.setFixedHeight(24)
         self.erofs_slider.valueChanged.connect(lambda v: self.erofs_level_label.setText(f"EROFS Level: {v}"))
         erofs_slider_row.addWidget(self.erofs_level_label)
         erofs_slider_row.addWidget(self.erofs_slider, 1)
@@ -613,11 +625,13 @@ class PackSettingsDialog(MessageBoxBase):
         # Brotli Level Slider
         brotli_row = QHBoxLayout()
         brotli_row.setSpacing(12)
+        brotli_row.setContentsMargins(0, 4, 0, 4)
         self.brotli_lbl = QLabel("Brotli Level: 0", build_card)
-        self.brotli_lbl.setStyleSheet("color: #e4e4e7; font-size: 13px; font-weight: 500; min-width: 105px;")
+        self.brotli_lbl.setStyleSheet("color: #e4e4e7; font-size: 13px; font-weight: 500; min-width: 110px;")
         self.brotli_slider = Slider(Qt.Orientation.Horizontal, build_card)
         self.brotli_slider.setRange(0, 11)
         self.brotli_slider.setValue(0)
+        self.brotli_slider.setFixedHeight(24)
         self.brotli_slider.valueChanged.connect(lambda v: self.brotli_lbl.setText(f"Brotli Level: {v}"))
         brotli_row.addWidget(self.brotli_lbl)
         brotli_row.addWidget(self.brotli_slider, 1)
@@ -754,7 +768,8 @@ class PackSuperMessageBox(MessageBoxBase):
         # 5. Pack Partitions Section
         self.viewLayout.addWidget(SubtitleLabel("Pack Partitions", self))
         self.tl = ListWidget(self)
-        self.tl.setMinimumHeight(180)
+        self.tl.setMinimumHeight(140)
+        self.tl.setMaximumHeight(200)
         self.tl.setSelectionMode(QListWidget.SelectionMode.NoSelection)
         self.tl.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.tl.setStyleSheet("""
