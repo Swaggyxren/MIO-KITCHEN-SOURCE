@@ -1,7 +1,10 @@
+import os
+import sys
 import platform
 
-from qfluentwidgets import QConfig, ConfigItem, BoolValidator, OptionsValidator, OptionsConfigItem, qconfig
-import os
+from qfluentwidgets import (
+    QConfig, ConfigItem, BoolValidator, OptionsValidator, OptionsConfigItem, qconfig, Theme
+)
 
 from src.core.utils import prog_path
 
@@ -27,4 +30,6 @@ class Config(QConfig):
     cpioImpl = OptionsConfigItem("Tool", "CpioImpl", "Native", OptionsValidator(['Native', "Python"]))
 config = Config()
 qconfig.load(config_file, config)
+if qconfig.themeMode.value == Theme.AUTO and sys.platform != "win32":
+    qconfig.set(qconfig.themeMode, Theme.DARK)
 cfg = config
