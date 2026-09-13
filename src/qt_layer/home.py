@@ -11,7 +11,7 @@ from qfluentwidgets import (ScrollArea, TitleLabel, SubtitleLabel, CaptionLabel,
                             setThemeColor)
 
 from src.qt_layer.widgets import ClickableLabel
-from qt_layer.settings import cfg
+from src.qt_layer.settings import cfg
 
 
 class QuickActionCard(QFrame):
