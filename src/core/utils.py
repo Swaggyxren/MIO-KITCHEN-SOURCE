@@ -58,7 +58,9 @@ DataImage = blockimgdiff.DataImage
 if hasattr(sys, 'set_int_max_str_digits'):
     sys.set_int_max_str_digits(0)
 
-if os.name == 'nt':
+if getattr(sys, 'frozen', False):
+    prog_path = os.path.normpath(os.path.abspath(os.path.dirname(sys.executable)))
+elif os.name == 'nt':
     prog_path = getcwd()
 else:
     prog_path = os.path.normpath(os.path.abspath(os.path.dirname(sys.argv[0])))
