@@ -22,7 +22,7 @@ from src.qt_layer.projects import ProjectsPage
 from src.qt_layer.settings import SettingsPage
 from src.qt_layer.about import AboutPage
 from src.qt_layer.home import HomePage
-from utils import temp, v_code
+from src.core.utils import temp, v_code
 
 if sys.platform == "linux" or sys.platform == "linux2":
     if os.environ.get("XDG_SESSION_TYPE") == "wayland":
@@ -263,11 +263,6 @@ def __init__qt(args):
 
     window = MainWindow()
     window.show()
-    try:
-        import pyi_splash
-        pyi_splash.close()
-    except ImportError:
-        pass
     sys.exit(app.exec())
 
 
