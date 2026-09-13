@@ -112,6 +112,35 @@ if sys.platform == "linux" or sys.platform == "linux2":
     except Exception as e:
         logging.warning(f"Could not apply Linux menu patch: {e}")
 
+# Patch QFluentWidgets TableItemDelegate to eliminate duplicate checkbox rendering on TableWidget & ListWidget
+try:
+    from qfluentwidgets.components.widgets.table_view import TableItemDelegate
+    from PySide6.QtWidgets import QStyleOptionViewItem
+
+    old_table_init_style = TableItemDelegate.initStyleOption
+
+    def patched_table_init_style(self, option, index):
+        old_table_init_style(self, option, index)
+        # Suppress duplicate native Qt check indicator; Fluent checkbox is drawn by self._drawCheckBox
+        if index.data(Qt.ItemDataRole.CheckStateRole) is not None:
+            option.features &= ~QStyleOptionViewItem.ViewItemFeature.HasCheckIndicator
+
+    TableItemDelegate.initStyleOption = patched_table_init_style
+
+    def patched_table_editor_event(self, event, model, option, index):
+        if event.type() == QEvent.Type.MouseButtonRelease and event.button() == Qt.MouseButton.LeftButton:
+            if index.flags() & Qt.ItemFlag.ItemIsUserCheckable:
+                state = index.data(Qt.ItemDataRole.CheckStateRole)
+                if state is not None:
+                    new_state = Qt.CheckState.Unchecked if (state == Qt.CheckState.Checked or state == 2) else Qt.CheckState.Checked
+                    model.setData(index, new_state, Qt.ItemDataRole.CheckStateRole)
+                    return True
+        return super(TableItemDelegate, self).editorEvent(event, model, option, index)
+
+    TableItemDelegate.editorEvent = patched_table_editor_event
+except Exception as e:
+    logging.warning(f"Could not apply TableItemDelegate patch: {e}")
+
 class TitleBarEventFilter(QObject):
     """Event filter for title bar dragging"""
     
