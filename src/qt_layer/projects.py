@@ -16,7 +16,7 @@ from src.core import contextpatch
 from src.core import extra
 from src.core import fspatch
 from src.core import tarsafe
-from qt_layer.log_box import OperationLogsWidget, LogMessageBoxBase
+from src.qt_layer.log_box import OperationLogsWidget, LogMessageBoxBase
 from src.core.cpio import repack as cpio_repack
 from src.core.rsceutil import repack as rsceutil_repack
 from src.core.splash_editor.main import splash_repack
@@ -26,11 +26,11 @@ try:
     from cpb_file import extract as extract_cpb
 except ModuleNotFoundError:
     pass
-import mkdtboimg
-import ofp_mtk_decrypt
-import ofp_qc_decrypt
-import opscrypto
-import ozipdecrypt
+from src.core import mkdtboimg
+from src.core import ofp_mtk_decrypt
+from src.core import ofp_qc_decrypt
+from src.core import opscrypto
+from src.core import ozipdecrypt
 from src.core.ntpiutils import extractor as ntpiextractor
 from src.core.ntpiutils import parser as ntpiparser
 from src.core.undz import DZFileTools
@@ -49,21 +49,21 @@ from PySide6.QtWidgets import QVBoxLayout, QHBoxLayout, QWidget, QTableWidgetIte
     QHeaderView
 from qfluentwidgets import BodyLabel, CaptionLabel, CheckBox, ComboBox, RadioButton, PushButton, ScrollArea, \
     SearchLineEdit, FluentIcon as FIF, PrimaryPushButton, TableWidget, MessageBox, IndeterminateProgressRing, \
-    SegmentedWidget, InfoBar, InfoBarPosition
+    IndeterminateProgressBar, SegmentedWidget, InfoBar, InfoBarPosition
 
-import ext4
-import imgextractor
-import lpunpack
-import splituapp
-import utils
-from payload_extract import extract_partitions_from_payload
-from pygpt.gpt_reader import GPTReader
-from qt_layer.settings import cfg
-from qt_layer.widgets import NewProjectDialog, show_info_bar, PackSettingsDialog, ConvertImageMessageBox, \
+from src.core import ext4
+from src.core import imgextractor
+from src.core import lpunpack
+from src.core import splituapp
+from src.core import utils
+from src.core.payload_extract import extract_partitions_from_payload
+from src.core.pygpt.gpt_reader import GPTReader
+from src.qt_layer.settings import cfg
+from src.qt_layer.widgets import NewProjectDialog, show_info_bar, PackSettingsDialog, ConvertImageMessageBox, \
     PackSuperMessageBox, RepackZipMessageBox
-from romfs_parse import RomfsParse
-from splash_editor.src.logo_gen_decoder import process_splashimg
-from utils import gettype, call
+from src.core.romfs_parse import RomfsParse
+from src.core.splash_editor.src.logo_gen_decoder import process_splashimg
+from src.core.utils import gettype, call
 from src.core.aml_image import main as aml_main
 
 try:
@@ -306,14 +306,44 @@ class ProjectsPage(QWidget):
         super().__init__(parent)
         self.setObjectName("ProjectsPage")
         self.current_partition_tab = 'unpack'
+        self._cached_unpack_data = None
+        self._cached_repack_data = None
         self.initUI()
 
+    def _show_loading(self):
+        if hasattr(self, 'ring'):
+            self.ring.show()
+            self.ring.start()
+        if hasattr(self, 'top_progress_bar'):
+            self.top_progress_bar.show()
+            self.top_progress_bar.start()
+
+    def _hide_loading(self):
+        if hasattr(self, 'ring'):
+            self.ring.stop()
+            self.ring.hide()
+        if hasattr(self, 'top_progress_bar'):
+            self.top_progress_bar.stop()
+            self.top_progress_bar.hide()
+
     def initUI(self):
+        self.setStyleSheet("background-color: #202020; color: #ffffff;")
+
+        # Outer layout with top indeterminate progress bar across full window width
+        outer_layout = QVBoxLayout(self)
+        outer_layout.setContentsMargins(0, 0, 0, 0)
+        outer_layout.setSpacing(0)
+
+        self.top_progress_bar = IndeterminateProgressBar(self)
+        self.top_progress_bar.setFixedHeight(3)
+        self.top_progress_bar.hide()
+        outer_layout.addWidget(self.top_progress_bar)
+
         # 1. Main layout with dark background
-        main_layout = QHBoxLayout(self)
+        main_layout = QHBoxLayout()
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
-        self.setStyleSheet("background-color: #202020; color: #ffffff;")
+        outer_layout.addLayout(main_layout, 1)
 
         # Operation Logs Area on the LEFT (fixed 280px wide, matching prototype w-72)
         self.operation_logs = OperationLogsWidget(self)
@@ -554,7 +584,7 @@ class ProjectsPage(QWidget):
                 self.script2fs(project_manger.current_work_path())
                 self.refresh_projects()
 
-            if cfg.autoUnpack:
+            if cfg.autoUnpack.value:
                 self.unpack([i.split('.')[0] for i in os.listdir(project_manger.current_work_path())])
             return
 
@@ -674,13 +704,18 @@ class ProjectsPage(QWidget):
         """)
         return title
 
+    def clear_partition_cache(self):
+        self._cached_unpack_data = None
+        self._cached_repack_data = None
+
     def refresh_projects(self):
+        self.clear_partition_cache()
         self.project_combo.clear()
         projects = project_manger.get_projects()
         self.project_combo.addItems(projects)
         if projects:
             self.project_combo.setCurrentIndex(0)
-            if self.unpack_rb.isChecked():
+            if getattr(self, 'current_partition_tab', 'unpack') == 'unpack':
                 self.refresh_unpack()
             else:
                 self.refresh_repack()
@@ -811,6 +846,7 @@ class ProjectsPage(QWidget):
     def _on_project_changed(self, name):
         if not name:
             return
+        self.clear_partition_cache()
         cfg.set(cfg.currentProjectName, name)
         t = time.strftime("%H:%M:%S")
         self.operation_logs.append_log(f"[{t}] Project loaded: {name}", "MUTED")
@@ -839,7 +875,7 @@ class ProjectsPage(QWidget):
         frame.addStretch(1)
 
         self.ring = IndeterminateProgressRing(self)
-        self.ring.setFixedSize(16, 16)
+        self.ring.setFixedSize(20, 20)
         self.ring.hide()
         self.execute_btn = PrimaryPushButton("Unpack", container)
         self.execute_btn.clicked.connect(self.exec_opera)
@@ -866,6 +902,8 @@ class ProjectsPage(QWidget):
         self.partition_table.setColumnWidth(1, 110)
         self.partition_table.setColumnWidth(2, 85)
         self.partition_table.setColumnWidth(3, 140)
+        self.partition_table.cellClicked.connect(self._on_partition_cell_clicked)
+        self.partition_table.itemChanged.connect(self._on_partition_item_changed)
         layout.addWidget(self.partition_table)
 
         # Bottom Controls Row: Select All + Format + Status Hint
@@ -904,24 +942,63 @@ class ProjectsPage(QWidget):
             self.format_combo.setEnabled(True)
             self.tab_status_hint.setText("Ready to unpack partition images")
             self.operation_logs.append_log(f"[{t}] Switched to [Unpack] tab.", "INFO")
-            self.refresh_unpack()
+            if self._cached_unpack_data is not None:
+                self.partition_table.clearContents()
+                self._load_mock_partitions_table(self._cached_unpack_data)
+            else:
+                self.refresh_unpack()
         else:
             self.execute_btn.setText("Pack")
             self.format_label.setEnabled(False)
             self.format_combo.setEnabled(False)
             self.tab_status_hint.setText("Ready to repack extracted partition folders")
             self.operation_logs.append_log(f"[{t}] Switched to [Pack] tab.", "INFO")
-            self.refresh_repack()
+            if self._cached_repack_data is not None:
+                self.partition_table.clearContents()
+                self._load_mock_partitions_table(self._cached_repack_data)
+            else:
+                self.refresh_repack()
+
+    def _on_partition_cell_clicked(self, row, column):
+        if column != 0:
+            item = self.partition_table.item(row, 0)
+            if item is not None:
+                new_state = Qt.CheckState.Unchecked if item.checkState() == Qt.CheckState.Checked else Qt.CheckState.Checked
+                item.setCheckState(new_state)
+
+    def _on_partition_item_changed(self, item):
+        if item.column() == 0 and not getattr(self, '_updating_select_all', False):
+            total_visible = 0
+            total_checked = 0
+            for r in range(self.partition_table.rowCount()):
+                if not self.partition_table.isRowHidden(r):
+                    it = self.partition_table.item(r, 0)
+                    if it:
+                        total_visible += 1
+                        if it.checkState() == Qt.CheckState.Checked:
+                            total_checked += 1
+            self._updating_select_all = True
+            if total_checked == total_visible and total_visible > 0:
+                self.select_all_cb.setCheckState(Qt.CheckState.Checked)
+            elif total_checked == 0:
+                self.select_all_cb.setCheckState(Qt.CheckState.Unchecked)
+            else:
+                self.select_all_cb.setCheckState(Qt.CheckState.PartiallyChecked)
+            self._updating_select_all = False
 
     def _toggle_select_all_partitions(self, state):
         """Toggles check state of all visible rows based on the Select All checkbox."""
-        target_state = Qt.CheckState.Checked if state == Qt.CheckState.Checked.value else Qt.CheckState.Unchecked
+        if getattr(self, '_updating_select_all', False):
+            return
+        self._updating_select_all = True
+        target_state = Qt.CheckState.Checked if (state == Qt.CheckState.Checked.value or state == Qt.CheckState.Checked or state == 2) else Qt.CheckState.Unchecked
 
         for row_idx in range(self.partition_table.rowCount()):
             if not self.partition_table.isRowHidden(row_idx):
                 name_item = self.partition_table.item(row_idx, 0)  # Column 0 has the checkbox
                 if name_item is not None:
                     name_item.setCheckState(target_state)
+        self._updating_select_all = False
 
     #functions for it
     def conversion(self, src_format: str, dst_format: str, selection):
@@ -1178,15 +1255,20 @@ class ProjectsPage(QWidget):
         if not work or not os.path.exists(work):
             show_info_bar(self, "No Active Project", "Please select or open an active project workspace first.", bar_type=2)
             return
-        from qt_layer.apk_assistant import ApkAssistantDialog
+        from src.qt_layer.apk_assistant import ApkAssistantDialog
         dialog = ApkAssistantDialog(work, self)
         dialog.exec()
+        self.clear_partition_cache()
+        if getattr(self, 'current_partition_tab', 'unpack') == 'pack':
+            self.refresh_repack()
+        else:
+            self.refresh_unpack()
 
     def refresh_repack(self):
+        self._cached_repack_data = None
         self.execute_btn.setText("Pack")
         self.format_combo.setDisabled(True)
-        self.ring.show()
-        self.ring.start()
+        self._show_loading()
 
         work = project_manger.current_work_path()
 
@@ -1199,18 +1281,10 @@ class ProjectsPage(QWidget):
         self._loader_worker.start()
 
     def _on_repack_data_loaded(self, data):
-        self.ring.stop()
-        self.ring.hide()
+        self._cached_repack_data = data
+        self._hide_loading()
         self.partition_table.clearContents()
-        if not data and (cfg.currentProjectName.value in ["Xiaomi_14_Global", ""] or not os.path.exists(project_manger.current_work_path())):
-            data = [
-                ("system", "4.82 GB (dir)", "erofs", "system", "rw"),
-                ("vendor", "1.12 GB (dir)", "ext4", "vendor", "rw"),
-                ("product", "3.20 GB (dir)", "erofs", "product", "rw"),
-                ("system_ext", "1.85 GB (dir)", "erofs", "system_ext", "rw"),
-                ("odm", "220.5 MB (dir)", "ext4", "odm", "rw"),
-            ]
-        self._load_mock_partitions_table(data)
+        self._load_mock_partitions_table(data or [])
 
     def logo_pack(self, origin_logo=None) -> int:
         work = project_manger.current_work_path()
@@ -1339,9 +1413,9 @@ class ProjectsPage(QWidget):
                  "extra_attr,compression,ro" if readonly else 'extra_attr,inode_checksum,sb_checksum,compression', "-U",
                  part_uuid, '-T', str(UTC), f"{work_output}/{name}.img", '-f']):
             return 1
-        # The efficiency of verifying and adding file contexts has been improved.
+        # The efficiency of verifying and adding file contexts has been improved (RomTools optimization).
         # Let's confirm that the basic context for the partition is present.
-        line_to_ensure = f'/{name}/{name} u:object_r:system_file:s0\n'
+        line_to_ensure = f'/{name} u:object_r:system_file:s0\n'
         file_contexts_path = f'{work}/config/{name}_file_contexts'
 
         found = False
@@ -1355,9 +1429,11 @@ class ProjectsPage(QWidget):
         if not found:
             with open(file_contexts_path, 'a', encoding='utf-8') as f_append:
                 f_append.write(line_to_ensure)
+        # RomTools: System partition mountpoint is / (system-as-root), other partitions are /<name>
+        mountpoint = "" if name in ['system', 'system_a', 'system_b'] else name
         return call(['sload.f2fs', '-d', '0', '-c' if compress else '', '-r' if readonly else '', '-C',
                      f'{work}/config/{name}_fs_config', '-f', work + name, '-p', f'{work_output}/{name}.img', '-s',
-                     f'{work}/config/{name}_file_contexts', '-t', f'/{name}', '-T', str(UTC),
+                     f'{work}/config/{name}_file_contexts', '-t', f'/{mountpoint}', '-T', str(UTC),
                      f'{work_output}/{name}.img'])
 
     def mke2fs(self, name: str, work: str, sparse: bool, work_output: str, size: int = 0, UTC: int = None):
@@ -1505,18 +1581,28 @@ class ProjectsPage(QWidget):
                         logging.exception('Bugs')
                 fspatch.main(work + dname, os.path.join(f"{work}/config", f"{dname}_fs_config"))
                 utils.remove_duplicate(f"{work}/config/{dname}_fs_config")
-                contexts_file = f"{work}/config/{dname}_file_contexts"
-                if os.path.exists(contexts_file):
-                    if cfg.selinuxPatch.value:
-                        contextpatch.main(work + dname, contexts_file, context_rule_file)
-                        new_rules = contextpatch.scan_context(contexts_file)
-                        rules = utils.JsonEdit(context_rule_file)
-                        rules.write(new_rules | rules.read())
-
-                    utils.remove_duplicate(contexts_file)
                 if fs_conver:
                     if parts_dict[dname] == origin_fs:
                         parts_dict[dname] = modify_fs
+                target_fstype = parts_dict.get(dname, 'ext4')
+                contexts_file = f"{work}/config/{dname}_file_contexts"
+                if os.path.exists(contexts_file):
+                    rule_file = context_rule_file if cfg.selinuxPatch.value else None
+                    contextpatch.main(work + dname, contexts_file, rule_file, fstype=target_fstype)
+                    if cfg.selinuxPatch.value:
+                        new_rules = contextpatch.scan_context(contexts_file)
+                        rules = utils.JsonEdit(context_rule_file)
+                        existing_rules = rules.read()
+                        # Sanitize rules to prevent global context poisoning:
+                        # Exclude generic root entries and corrupted rootfs:s0 labels
+                        sanitized = {
+                            k: v for k, v in (existing_rules | new_rules).items()
+                            if k not in ('/', '/lost\\+found', '/lost+found')
+                            and not (v == 'u:object_r:rootfs:s0' and not (k.startswith('/init') or k == '/default.prop'))
+                        }
+                        rules.write(sanitized)
+
+                    utils.remove_duplicate(contexts_file)
                 if parts_dict[dname] == 'erofs':
                     if self.mkerofs(dname, str(erofs_compress_format), work=work,
                                     work_output=project_manger.current_work_output_path(), level=int(scale_erofs),
@@ -1631,8 +1717,7 @@ class ProjectsPage(QWidget):
         self.stderr_redirector.text_written.connect(lambda text: self.operation_logs.append_log(text.strip(), "ERROR"))
         sys.stdout = self.stdout_redirector
         sys.stderr = self.stderr_redirector
-        self.ring.show()
-        self.ring.start()
+        self._show_loading()
         worker.task_finished.connect(self.job_is_done)
         worker.start()
         self.execute_btn.setEnabled(False)
@@ -1752,13 +1837,17 @@ class ProjectsPage(QWidget):
                 logging.debug(f"Desktop notify-send failed: {e}")
 
     def job_is_done(self):
-        self.ring.stop()
-        self.ring.hide()
+        self._hide_loading()
         sys.stderr = sys.stderr_old
         sys.stdout = sys.stdout_old
         self.execute_btn.setEnabled(True)
         t = time.strftime("%H:%M:%S")
         self.operation_logs.append_log(f"[{t}] Operation completed.", "INFO")
+        self.clear_partition_cache()
+        if getattr(self, 'current_partition_tab', 'unpack') == 'unpack':
+            self.refresh_unpack()
+        else:
+            self.refresh_repack()
 
         # Determine task context for custom message
         task_type = getattr(self, "_active_task_type", "Unpack" if self.unpack_rb.isChecked() else "Pack")
@@ -1781,10 +1870,10 @@ class ProjectsPage(QWidget):
         self.show_character_notification(title, msg)
 
     def refresh_unpack(self):
+        self._cached_unpack_data = None
         self.execute_btn.setText("Unpack")
         self.format_combo.setDisabled(False)
-        self.ring.show()
-        self.ring.start()
+        self._show_loading()
 
         form = self.format_combo.currentText()
         work = project_manger.current_work_path()
@@ -1798,18 +1887,10 @@ class ProjectsPage(QWidget):
         self._loader_worker.start()
 
     def _on_unpack_data_loaded(self, data):
-        self.ring.stop()
-        self.ring.hide()
+        self._cached_unpack_data = data
+        self._hide_loading()
         self.partition_table.clearContents()
-        if not data and (cfg.currentProjectName.value in ["Xiaomi_14_Global", ""] or not project_manger.exist()):
-            data = [
-                ("system", "3.41 GB", "erofs", "system.img", "ro"),
-                ("vendor", "744.5 MB", "ext4", "vendor.img", "rw"),
-                ("product", "2.14 GB", "erofs", "product.img", "ro"),
-                ("system_ext", "1.25 GB", "erofs", "system_ext.img", "ro"),
-                ("boot", "64.0 MB", "raw", "boot.img", "ro"),
-            ]
-        self._load_mock_partitions_table(data)
+        self._load_mock_partitions_table(data or [])
 
     def filter_tabview(self, query: str):
         search_query = query.strip().lower()
@@ -2086,6 +2167,7 @@ class ProjectsPage(QWidget):
 
 class PartitionLoaderWorker(QThread):
     loaded = Signal(list)
+    _folder_size_cache = {}
 
     def __init__(self, is_unpack=True, format_type='img', work_path=''):
         super().__init__()
@@ -2157,7 +2239,17 @@ class PartitionLoaderWorker(QThread):
                 for folder in os.listdir(work):
                     folder_path = os.path.join(work, folder)
                     if os.path.isdir(folder_path) and folder in parts_dict.keys():
-                        size_val = utils.hum_convert(utils.GetFolderSize(folder_path).rsize_v)
+                        try:
+                            mtime = os.path.getmtime(folder_path)
+                            cache_key = (folder_path, mtime)
+                            if cache_key in PartitionLoaderWorker._folder_size_cache:
+                                size_v = PartitionLoaderWorker._folder_size_cache[cache_key]
+                            else:
+                                size_v = utils.GetFolderSize(folder_path).rsize_v
+                                PartitionLoaderWorker._folder_size_cache[cache_key] = size_v
+                        except Exception:
+                            size_v = utils.GetFolderSize(folder_path).rsize_v
+                        size_val = utils.hum_convert(size_v)
                         data.append((folder, size_val, parts_dict.get(folder, 'Unknown'), "Source", "rw"))
         return data
 
