@@ -6,6 +6,7 @@ on:
   push:
     paths:
       - "bin/setting.ini"
+      - ".github/workflows/**"
   workflow_dispatch:
 jobs:
   build:
@@ -32,15 +33,12 @@ jobs:
           python3 build.py grb
           python3 build.py ma
       - name: Upload release
-        uses: ncipollo/release-action@v1
-        with:
-          allowUpdates: true
-          omitBodyDuringUpdate: true
-          removeArtifacts: true
-          name: "MIO-KITCHEN-${{ env.ver }}"
-          tag: "CI_BUILD_${{ github.run_number }}"
-          bodyFile: "body.md"
-          artifacts: "*.zip"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view "CI_BUILD_${{ github.run_number }}" >/dev/null 2>&1 || \
+            gh release create "CI_BUILD_${{ github.run_number }}" --title "MIO-KITCHEN-${{ env.ver }}" --notes-file "body.md"
+          gh release upload "CI_BUILD_${{ github.run_number }}" *.zip --clobber
 
   build-win:
     runs-on: windows-latest
