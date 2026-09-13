@@ -2,13 +2,43 @@ import os
 import sys
 import time
 import warnings
-
 import logging
+
+if sys.platform.startswith("linux"):
+    if "QT_QPA_PLATFORM" not in os.environ and os.environ.get("XDG_SESSION_TYPE") == "wayland":
+        os.environ["QT_QPA_PLATFORM"] = "xcb"
+
+    import ctypes
+    for _lib in (
+        "/usr/lib/libxkbcommon.so.0",
+        "/usr/lib64/libxkbcommon.so.0",
+        "/usr/lib/x86_64-linux-gnu/libxkbcommon.so.0",
+        "/usr/lib/aarch64-linux-gnu/libxkbcommon.so.0",
+    ):
+        if os.path.exists(_lib):
+            try:
+                ctypes.CDLL(_lib, mode=ctypes.RTLD_GLOBAL)
+                break
+            except Exception:
+                pass
+    for _lib in (
+        "/usr/lib/libxkbcommon-x11.so.0",
+        "/usr/lib64/libxkbcommon-x11.so.0",
+        "/usr/lib/x86_64-linux-gnu/libxkbcommon-x11.so.0",
+        "/usr/lib/aarch64-linux-gnu/libxkbcommon-x11.so.0",
+    ):
+        if os.path.exists(_lib):
+            try:
+                ctypes.CDLL(_lib, mode=ctypes.RTLD_GLOBAL)
+                break
+            except Exception:
+                pass
+
 from PySide6.QtCore import Qt, QTimer, QSize, QPoint, QEvent, QObject
 from PySide6.QtGui import QIcon, QGuiApplication, QCursor
 from PySide6.QtWidgets import QApplication
 from qfluentwidgets import (NavigationItemPosition, SplashScreen, setTheme, Theme,
-                            FluentWindow, FluentIcon as FIF)
+                            FluentWindow, FluentIcon as FIF, setThemeColor)
 
 _src_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _root_dir = os.path.dirname(_src_dir)
@@ -17,21 +47,11 @@ for _p in (_root_dir, _src_dir, _core_dir):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-from src.qt_layer.plugins import PluginPage
-from src.qt_layer.projects import ProjectsPage
-from src.qt_layer.settings import SettingsPage
-from src.qt_layer.about import AboutPage
-from src.qt_layer.home import HomePage
-from utils import temp, v_code
-
 if sys.platform == "linux" or sys.platform == "linux2":
-    if os.environ.get("XDG_SESSION_TYPE") == "wayland":
-        os.environ["QT_QPA_PLATFORM"] = "xcb"
-
     # Patch QFluentWidgets popup menus on Linux to eliminate black box artifacts and mask glitches
     try:
         from qfluentwidgets import RoundMenu, MenuAnimationType
-        from qfluentwidgets.components.widgets.combo_box import ComboBox
+        from qfluentwidgets.components.widgets.combo_box import ComboBox, ComboBoxBase, EditableComboBox
         from PySide6.QtGui import QAction
 
         old_round_menu_init = RoundMenu._RoundMenu__initWidgets
@@ -81,9 +101,135 @@ if sys.platform == "linux" or sys.platform == "linux2":
             pos = self.mapToGlobal(QPoint(0, self.height() + 2))
             menu.exec(pos, ani=False, aniType=MenuAnimationType.NONE)
 
+        ComboBoxBase._showComboMenu = linux_show_combo_menu
         ComboBox._showComboMenu = linux_show_combo_menu
+        EditableComboBox._showComboMenu = linux_show_combo_menu
     except Exception as e:
         logging.warning(f"Could not apply Linux menu patch: {e}")
+
+# Patch QFluentWidgets TableItemDelegate & ListItemDelegate to eliminate duplicate checkbox rendering and properly offset text
+try:
+    from qfluentwidgets.components.widgets.table_view import TableItemDelegate
+    from qfluentwidgets.common.style_sheet import isDarkTheme
+    from PySide6.QtWidgets import QStyleOptionViewItem, QStyle, QApplication, QStyledItemDelegate
+    from PySide6.QtGui import QPainter, QColor
+
+    old_table_paint = TableItemDelegate.paint
+
+    def patched_table_paint(self, painter, option, index):
+        if index.data(Qt.ItemDataRole.CheckStateRole) is None:
+            return old_table_paint(self, painter, option, index)
+
+        painter.save()
+        painter.setPen(Qt.NoPen)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setClipping(True)
+        painter.setClipRect(option.rect)
+
+        opt = QStyleOptionViewItem(option)
+        opt.rect.adjust(0, self.margin, 0, -self.margin)
+
+        # Draw row highlight / alternating background
+        isHover = self.hoverRow == index.row()
+        isPressed = self.pressedRow == index.row()
+        isAlternate = index.row() % 2 == 0 and self.parent().alternatingRowColors()
+        isDark = isDarkTheme()
+
+        c = 255 if isDark else 0
+        alpha = 0
+        if index.row() not in self.selectedRows:
+            if isPressed:
+                alpha = 9 if isDark else 6
+            elif isHover:
+                alpha = 12
+            elif isAlternate:
+                alpha = 5
+        else:
+            if isPressed:
+                alpha = 15 if isDark else 9
+            elif isHover:
+                alpha = 25
+            else:
+                alpha = 17
+
+        if index.data(Qt.ItemDataRole.BackgroundRole):
+            painter.setBrush(index.data(Qt.ItemDataRole.BackgroundRole))
+        else:
+            painter.setBrush(QColor(c, c, c, alpha))
+
+        self._drawBackground(painter, opt, index)
+
+        if index.row() in self.selectedRows and index.column() == 0 and self.parent().horizontalScrollBar().value() == 0:
+            self._drawIndicator(painter, opt, index)
+
+        # Draw Fluent checkbox
+        self._drawCheckBox(painter, opt, index)
+        painter.restore()
+
+        # Draw text/icon (if present) offset past the checkbox, without drawing the native Qt checkbox
+        has_content = bool(index.data(Qt.ItemDataRole.DisplayRole) or index.data(Qt.ItemDataRole.DecorationRole))
+        if has_content:
+            text_opt = QStyleOptionViewItem(option)
+            self.initStyleOption(text_opt, index)
+            text_opt.features &= ~QStyleOptionViewItem.ViewItemFeature.HasCheckIndicator
+            # Checkbox ends at option.rect.x() + 34; indent text so it begins cleanly after it
+            text_opt.rect.setLeft(option.rect.x() + 42)
+            widget = self.parent()
+            style = widget.style() if widget else QApplication.style()
+            style.drawControl(QStyle.ControlElement.CE_ItemViewItem, text_opt, painter, widget)
+
+    def patched_table_editor_event(self, event, model, option, index):
+        if index.flags() & Qt.ItemFlag.ItemIsUserCheckable:
+            state = index.data(Qt.ItemDataRole.CheckStateRole)
+            if state is not None:
+                if event.type() in (QEvent.Type.MouseButtonPress, QEvent.Type.MouseButtonDblClick):
+                    if event.button() == Qt.MouseButton.LeftButton:
+                        return True
+                elif event.type() == QEvent.Type.MouseButtonRelease and event.button() == Qt.MouseButton.LeftButton:
+                    new_state = Qt.CheckState.Unchecked if (state == Qt.CheckState.Checked or state == 2) else Qt.CheckState.Checked
+                    model.setData(index, new_state, Qt.ItemDataRole.CheckStateRole)
+                    return True
+        return QStyledItemDelegate.editorEvent(self, event, model, option, index)
+
+    TableItemDelegate.paint = patched_table_paint
+    TableItemDelegate.editorEvent = patched_table_editor_event
+
+    try:
+        from qfluentwidgets.components.widgets.list_view import ListItemDelegate
+        ListItemDelegate.paint = patched_table_paint
+        ListItemDelegate.editorEvent = patched_table_editor_event
+    except Exception:
+        pass
+
+    try:
+        from qfluentwidgets.components.widgets.tree_view import TreeItemDelegate
+        TreeItemDelegate.paint = patched_table_paint
+        TreeItemDelegate.editorEvent = patched_table_editor_event
+    except Exception:
+        pass
+except Exception as e:
+    logging.warning(f"Could not apply TableItemDelegate patch: {e}")
+
+# Patch QFluentWidgets InfoBar to ensure clicking X or timeout immediately hides and dismisses the notification
+try:
+    from qfluentwidgets import InfoBar
+
+    def patched_infobar_close_event(self, e):
+        self.closedSignal.emit()
+        self.hide()
+        self.deleteLater()
+        e.accept()
+
+    InfoBar.closeEvent = patched_infobar_close_event
+except Exception as e:
+    logging.warning(f"Could not apply InfoBar patch: {e}")
+
+from src.qt_layer.plugins import PluginPage
+from src.qt_layer.projects import ProjectsPage
+from src.qt_layer.settings import SettingsPage
+from src.qt_layer.about import AboutPage
+from src.qt_layer.home import HomePage
+from src.core.utils import temp, v_code
 
 class TitleBarEventFilter(QObject):
     """Event filter for title bar dragging"""
@@ -128,8 +274,9 @@ class MainWindow(FluentWindow):
         # Suppress window opacity warnings on Linux
         warnings.filterwarnings('ignore', message='.*opacity.*')
 
-        # 设置主题
-        setTheme(Theme.AUTO)
+        # Set theme to Dark mode (fixes light theme clash on Linux/macOS)
+        setTheme(Theme.DARK)
+        setThemeColor('#0078D4')
 
         # Prototype logo (accent blue badge with crisp bold white 'M')
         logo_path = 'bin/logo.png' if os.path.exists('bin/logo.png') else 'icon.ico'
@@ -207,16 +354,25 @@ class MainWindow(FluentWindow):
     def switchTo(self, interface):
         super().switchTo(interface)
         name = interface.objectName() if hasattr(interface, 'objectName') else str(interface)
-        print(f"[NAVIGATE] Switched to view: {name}", flush=True)
+        try:
+            print(f"[NAVIGATE] Switched to view: {name}", flush=True)
+        except Exception:
+            pass
         logging.info(f"[NAVIGATE] Switched to view: {name}")
 
     def _on_quick_new_project(self):
-        print("[ACTION] Triggered Quick Action: New Project", flush=True)
+        try:
+            print("[ACTION] Triggered Quick Action: New Project", flush=True)
+        except Exception:
+            pass
         self.switchTo(self.project_page)
         self.project_page.show_create_dialog()
 
     def _on_quick_unpack_file(self):
-        print("[ACTION] Triggered Quick Action: Unpack File", flush=True)
+        try:
+            print("[ACTION] Triggered Quick Action: Unpack File", flush=True)
+        except Exception:
+            pass
         from PySide6.QtWidgets import QFileDialog
         file_path, _ = QFileDialog.getOpenFileName(
             self,
@@ -225,7 +381,10 @@ class MainWindow(FluentWindow):
             "ROM Files (*.zip *.bin *.img *.ozip *.ofp *.ops *.pac *.cpb *.tar *.kdz);;All Files (*)"
         )
         if file_path:
-            print(f"[ACTION] Selected ROM file to unpack: {file_path}", flush=True)
+            try:
+                print(f"[ACTION] Selected ROM file to unpack: {file_path}", flush=True)
+            except Exception:
+                pass
             self.switchTo(self.project_page)
             self.project_page.dndfile([file_path])
 
@@ -263,11 +422,6 @@ def __init__qt(args):
 
     window = MainWindow()
     window.show()
-    try:
-        import pyi_splash
-        pyi_splash.close()
-    except ImportError:
-        pass
     sys.exit(app.exec())
 
 
