@@ -80,7 +80,6 @@ class HomePage(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("HomePage")
-        setThemeColor('#0078D4')
         self.initUI()
 
     def initUI(self):
