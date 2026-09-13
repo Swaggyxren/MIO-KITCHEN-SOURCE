@@ -16,6 +16,7 @@
 # limitations under the License.
 """
 Patch Fs_Config To Add Missing File Config
+Includes optimizations and root entry guarantees inspired by RomTools by Danda420.
 """
 import os
 from collections import deque
@@ -62,7 +63,7 @@ def scan_dir(folder: str):
             yield os.path.join(root, dir_).replace(folder, os.path.basename(folder)).replace('\\', '/')
         for file in files:
             yield os.path.join(root, file).replace(folder, os.path.basename(folder)).replace('\\', '/')
-        yield from allfiles
+    yield from allfiles
 
 
 def islink(file) -> str:
@@ -150,6 +151,19 @@ def fs_patch(fs_file, dir_path) -> tuple:  # 接收两个字典对比
             r_fs.append(i)
             new_add += 1
             new_fs[i] = config
+
+    # Ensure root partition entries exist (RomTools gen_fs-config standard)
+    part_name = os.path.basename(os.path.abspath(dir_path))
+    root_entries = {
+        '/': ['0', '0', '0755'],
+        f'{part_name}': ['0', '0', '0755'],
+        f'{part_name}/': ['0', '0', '0755'],
+    }
+    for r_key, r_val in root_entries.items():
+        if r_key not in new_fs:
+            new_fs[r_key] = r_val
+            new_add += 1
+
     return new_fs, new_add
 
 
