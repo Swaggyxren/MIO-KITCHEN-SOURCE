@@ -2,8 +2,38 @@ import os
 import sys
 import time
 import warnings
-
 import logging
+
+if sys.platform.startswith("linux"):
+    if "QT_QPA_PLATFORM" not in os.environ and os.environ.get("XDG_SESSION_TYPE") == "wayland":
+        os.environ["QT_QPA_PLATFORM"] = "xcb"
+
+    import ctypes
+    for _lib in (
+        "/usr/lib/libxkbcommon.so.0",
+        "/usr/lib64/libxkbcommon.so.0",
+        "/usr/lib/x86_64-linux-gnu/libxkbcommon.so.0",
+        "/usr/lib/aarch64-linux-gnu/libxkbcommon.so.0",
+    ):
+        if os.path.exists(_lib):
+            try:
+                ctypes.CDLL(_lib, mode=ctypes.RTLD_GLOBAL)
+                break
+            except Exception:
+                pass
+    for _lib in (
+        "/usr/lib/libxkbcommon-x11.so.0",
+        "/usr/lib64/libxkbcommon-x11.so.0",
+        "/usr/lib/x86_64-linux-gnu/libxkbcommon-x11.so.0",
+        "/usr/lib/aarch64-linux-gnu/libxkbcommon-x11.so.0",
+    ):
+        if os.path.exists(_lib):
+            try:
+                ctypes.CDLL(_lib, mode=ctypes.RTLD_GLOBAL)
+                break
+            except Exception:
+                pass
+
 from PySide6.QtCore import Qt, QTimer, QSize, QPoint, QEvent, QObject
 from PySide6.QtGui import QIcon, QGuiApplication, QCursor
 from PySide6.QtWidgets import QApplication
@@ -25,9 +55,6 @@ from src.qt_layer.home import HomePage
 from src.core.utils import temp, v_code
 
 if sys.platform == "linux" or sys.platform == "linux2":
-    if os.environ.get("XDG_SESSION_TYPE") == "wayland":
-        os.environ["QT_QPA_PLATFORM"] = "xcb"
-
     # Patch QFluentWidgets popup menus on Linux to eliminate black box artifacts and mask glitches
     try:
         from qfluentwidgets import RoundMenu, MenuAnimationType
@@ -208,16 +235,25 @@ class MainWindow(FluentWindow):
     def switchTo(self, interface):
         super().switchTo(interface)
         name = interface.objectName() if hasattr(interface, 'objectName') else str(interface)
-        print(f"[NAVIGATE] Switched to view: {name}", flush=True)
+        try:
+            print(f"[NAVIGATE] Switched to view: {name}", flush=True)
+        except Exception:
+            pass
         logging.info(f"[NAVIGATE] Switched to view: {name}")
 
     def _on_quick_new_project(self):
-        print("[ACTION] Triggered Quick Action: New Project", flush=True)
+        try:
+            print("[ACTION] Triggered Quick Action: New Project", flush=True)
+        except Exception:
+            pass
         self.switchTo(self.project_page)
         self.project_page.show_create_dialog()
 
     def _on_quick_unpack_file(self):
-        print("[ACTION] Triggered Quick Action: Unpack File", flush=True)
+        try:
+            print("[ACTION] Triggered Quick Action: Unpack File", flush=True)
+        except Exception:
+            pass
         from PySide6.QtWidgets import QFileDialog
         file_path, _ = QFileDialog.getOpenFileName(
             self,
@@ -226,7 +262,10 @@ class MainWindow(FluentWindow):
             "ROM Files (*.zip *.bin *.img *.ozip *.ofp *.ops *.pac *.cpb *.tar *.kdz);;All Files (*)"
         )
         if file_path:
-            print(f"[ACTION] Selected ROM file to unpack: {file_path}", flush=True)
+            try:
+                print(f"[ACTION] Selected ROM file to unpack: {file_path}", flush=True)
+            except Exception:
+                pass
             self.switchTo(self.project_page)
             self.project_page.dndfile([file_path])
 
