@@ -3,7 +3,6 @@
 bin/configs.json
 build/
 dist/
-tool.spec
 body.md
 
 # Python cache
