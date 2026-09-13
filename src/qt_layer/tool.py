@@ -8,7 +8,7 @@ from PySide6.QtCore import Qt, QTimer, QSize, QPoint, QEvent, QObject
 from PySide6.QtGui import QIcon, QGuiApplication, QCursor
 from PySide6.QtWidgets import QApplication
 from qfluentwidgets import (NavigationItemPosition, SplashScreen, setTheme, Theme,
-                            FluentWindow, FluentIcon as FIF)
+                            FluentWindow, FluentIcon as FIF, setThemeColor)
 
 _src_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _root_dir = os.path.dirname(_src_dir)
@@ -128,8 +128,9 @@ class MainWindow(FluentWindow):
         # Suppress window opacity warnings on Linux
         warnings.filterwarnings('ignore', message='.*opacity.*')
 
-        # 设置主题
-        setTheme(Theme.AUTO)
+        # Set theme to Dark mode (fixes light theme clash on Linux/macOS)
+        setTheme(Theme.DARK)
+        setThemeColor('#0078D4')
 
         # Prototype logo (accent blue badge with crisp bold white 'M')
         logo_path = 'bin/logo.png' if os.path.exists('bin/logo.png') else 'icon.ico'
