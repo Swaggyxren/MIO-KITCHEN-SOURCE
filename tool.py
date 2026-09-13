@@ -17,17 +17,46 @@ import sys
 import time
 import traceback
 
+import signal
+
+try:
+    signal.signal(signal.SIGPIPE, signal.SIG_IGN)
+except Exception:
+    pass
+
+class SafeStream(object):
+    def __init__(self, stream):
+        self._stream = stream
+
+    def write(self, s):
+        try:
+            if self._stream:
+                return self._stream.write(s)
+        except (BrokenPipeError, IOError, OSError, ValueError):
+            pass
+
+    def flush(self):
+        try:
+            if self._stream:
+                return self._stream.flush()
+        except (BrokenPipeError, IOError, OSError, ValueError):
+            pass
+
+    def __getattr__(self, name):
+        return getattr(self._stream, name)
+
 sys_stdout = sys.stdout
 sys_stderr = sys.stderr
 
-class DevNull(object):
-    def write(self, s):
-        pass
-    def flush(self):
-        pass
+if sys.stdout:
+    sys.stdout = SafeStream(sys.stdout)
+else:
+    sys.stdout = SafeStream(None)
 
-if not sys.stdout:
-    sys.stdout = DevNull()
+if sys.stderr:
+    sys.stderr = SafeStream(sys.stderr)
+else:
+    sys.stderr = SafeStream(None)
 
 if sys.version_info.major == 3 and sys.version_info.minor < 8:
     input(f"Not supported: [{sys.version}] yet\nEnter to quit\nSorry for any inconvenience caused")
@@ -40,6 +69,36 @@ _qt = os.path.join(_src, "qt_layer")
 for _dir in (_root, _src, _core, _qt):
     if _dir not in sys.path:
         sys.path.insert(0, _dir)
+
+if sys.platform.startswith("linux"):
+    if "QT_QPA_PLATFORM" not in os.environ and os.environ.get("XDG_SESSION_TYPE") == "wayland":
+        os.environ["QT_QPA_PLATFORM"] = "xcb"
+
+    import ctypes
+    for _lib in (
+        "/usr/lib/libxkbcommon.so.0",
+        "/usr/lib64/libxkbcommon.so.0",
+        "/usr/lib/x86_64-linux-gnu/libxkbcommon.so.0",
+        "/usr/lib/aarch64-linux-gnu/libxkbcommon.so.0",
+    ):
+        if os.path.exists(_lib):
+            try:
+                ctypes.CDLL(_lib, mode=ctypes.RTLD_GLOBAL)
+                break
+            except Exception:
+                pass
+    for _lib in (
+        "/usr/lib/libxkbcommon-x11.so.0",
+        "/usr/lib64/libxkbcommon-x11.so.0",
+        "/usr/lib/x86_64-linux-gnu/libxkbcommon-x11.so.0",
+        "/usr/lib/aarch64-linux-gnu/libxkbcommon-x11.so.0",
+    ):
+        if os.path.exists(_lib):
+            try:
+                ctypes.CDLL(_lib, mode=ctypes.RTLD_GLOBAL)
+                break
+            except Exception:
+                pass
 
 try:
     from src.qt_layer.tool import *
