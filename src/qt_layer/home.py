@@ -11,7 +11,7 @@ from qfluentwidgets import (ScrollArea, TitleLabel, SubtitleLabel, CaptionLabel,
                             setThemeColor)
 
 from src.qt_layer.widgets import ClickableLabel
-from qt_layer.settings import cfg
+from src.qt_layer.settings import cfg
 
 
 class QuickActionCard(QFrame):
@@ -80,7 +80,6 @@ class HomePage(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("HomePage")
-        setThemeColor('#0078D4')
         self.initUI()
 
     def initUI(self):
@@ -277,9 +276,10 @@ class HomePage(QWidget):
         tiles_layout = QHBoxLayout()
         tiles_layout.setSpacing(10)
 
-        current_name = cfg.currentProjectName.value if cfg.currentProjectName.value else "Xiaomi_14_Global"
+        has_proj = bool(cfg.currentProjectName.value and os.path.exists(os.path.join("workspace", cfg.currentProjectName.value)))
+        current_name = cfg.currentProjectName.value if has_proj else "None"
         tile1 = self._create_info_tile("PROJECT", current_name)
-        tile2 = self._create_info_tile("PARTITIONS", "5 detected (erofs/ext4)")
+        tile2 = self._create_info_tile("PARTITIONS", "Configured" if has_proj else "None")
         tile3 = self._create_info_tile("DEFAULT FORMAT", ".img (raw/sparse)")
         tiles_layout.addWidget(tile1)
         tiles_layout.addWidget(tile2)
@@ -288,7 +288,7 @@ class HomePage(QWidget):
 
         # Footer row with link
         footer_row = QHBoxLayout()
-        loc_lbl = QLabel(f"Location: workspace/{current_name}/")
+        loc_lbl = QLabel(f"Location: workspace/{current_name}/" if has_proj else "No active project")
         loc_lbl.setStyleSheet("color: #777777; font-size: 11px; border: none; background: transparent;")
         manage_btn = QPushButton("Manage in Projects →")
         manage_btn.setCursor(Qt.PointingHandCursor)
