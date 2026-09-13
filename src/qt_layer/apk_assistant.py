@@ -11,7 +11,7 @@ from qfluentwidgets import (TableWidget, SearchLineEdit, PushButton,
                             IndeterminateProgressBar)
 
 from androguard.core.apk import APK
-from utils import hum_convert
+from src.core.utils import hum_convert
 
 
 class ApkScanWorker(QThread):
