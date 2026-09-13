@@ -6,49 +6,48 @@ from PySide6.QtCore import QTimer, Qt, Signal
 from PySide6.QtGui import QColor, QCursor
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QGridLayout,
                                QLabel, QLineEdit, QHBoxLayout, QButtonGroup, QFrame, QListWidget)
-from qfluentwidgets import InfoBar, InfoBarPosition, ListWidget, CheckBox, LineEdit, ComboBox, SubtitleLabel, \
+from qfluentwidgets import InfoBar, InfoBarPosition, ListWidget, CheckBox, LineEdit, ComboBox, EditableComboBox, SubtitleLabel, \
     RadioButton, PushButton, BodyLabel
 from qfluentwidgets import (MessageBoxBase, SwitchButton, Slider,
-                            CaptionLabel)
+                            CaptionLabel, SingleDirectionScrollArea)
 
-import utils
-from utils import gettype
+from src.core import utils
+from src.core.utils import gettype
 
 
 def show_info_bar(parent, title, content, bar_type: int = 3, duration=3000):
     """bar_type: 1=error 2=warning 3=info"""
-    """显示提示条，根据配置决定是否显示"""
-    if True:
-        if bar_type == 1:
-            InfoBar.error(
-                title=title,
-                content=content,
-                orient=Qt.Horizontal,
-                isClosable=True,
-                position=InfoBarPosition.BOTTOM,
-                duration=duration,
-                parent=parent
-            )
-        elif bar_type == 2:
-            InfoBar.warning(
-                title=title,
-                content=content,
-                orient=Qt.Horizontal,
-                isClosable=True,
-                position=InfoBarPosition.BOTTOM,
-                duration=duration,
-                parent=parent
-            )
-        else:
-            InfoBar.success(
-                title=title,
-                content=content,
-                orient=Qt.Horizontal,
-                isClosable=True,
-                position=InfoBarPosition.BOTTOM,
-                duration=duration,
-                parent=parent
-            )
+    target = parent.window() if hasattr(parent, 'window') and parent.window() else parent
+    if bar_type == 1:
+        return InfoBar.error(
+            title=title,
+            content=content,
+            orient=Qt.Horizontal,
+            isClosable=True,
+            position=InfoBarPosition.BOTTOM,
+            duration=duration,
+            parent=target
+        )
+    elif bar_type == 2:
+        return InfoBar.warning(
+            title=title,
+            content=content,
+            orient=Qt.Horizontal,
+            isClosable=True,
+            position=InfoBarPosition.BOTTOM,
+            duration=duration,
+            parent=target
+        )
+    else:
+        return InfoBar.success(
+            title=title,
+            content=content,
+            orient=Qt.Horizontal,
+            isClosable=True,
+            position=InfoBarPosition.BOTTOM,
+            duration=duration,
+            parent=target
+        )
 
 class NewProjectDialog(MessageBoxBase):
     """自定义对话框，用于创建或重命名项目"""
@@ -391,16 +390,26 @@ class PackSettingsDialog(MessageBoxBase):
         self.viewLayout.addWidget(self.titleLabel)
         self.viewLayout.addWidget(self.subtitleLabel)
 
-        # Custom content container
-        self.content_widget = QWidget(self)
+        # Custom content container inside SingleDirectionScrollArea to prevent vertical clipping/squishing
+        self.content_widget = QWidget()
         self.initCustomUI()
-        self.viewLayout.addWidget(self.content_widget)
+
+        self.scroll_area = SingleDirectionScrollArea(self.widget)
+        self.scroll_area.setWidget(self.content_widget)
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+        self.scroll_area.enableTransparentBackground()
+
+        parent_h = parent.height() if parent else 700
+        dialog_max_h = max(380, min(parent_h - 180, 520))
+        self.scroll_area.setFixedHeight(dialog_max_h)
+        self.viewLayout.addWidget(self.scroll_area)
 
         # Action buttons
         self.yesButton.setText("Pack")
         self.cancelButton.setText("Cancel")
 
-        self.widget.setMinimumWidth(640)
+        self.widget.setMinimumWidth(680)
 
     def _field_lbl(self, text, parent):
         lbl = QLabel(text, parent)
@@ -497,11 +506,13 @@ class PackSettingsDialog(MessageBoxBase):
         # Slider row
         erofs_slider_row = QHBoxLayout()
         erofs_slider_row.setSpacing(12)
+        erofs_slider_row.setContentsMargins(0, 4, 0, 4)
         self.erofs_level_label = QLabel("EROFS Level: 8", fs_card)
-        self.erofs_level_label.setStyleSheet("color: #e4e4e7; font-size: 13px; font-weight: 500; min-width: 105px;")
+        self.erofs_level_label.setStyleSheet("color: #e4e4e7; font-size: 13px; font-weight: 500; min-width: 110px;")
         self.erofs_slider = Slider(Qt.Orientation.Horizontal, fs_card)
         self.erofs_slider.setRange(0, 20)
         self.erofs_slider.setValue(8)
+        self.erofs_slider.setFixedHeight(24)
         self.erofs_slider.valueChanged.connect(lambda v: self.erofs_level_label.setText(f"EROFS Level: {v}"))
         erofs_slider_row.addWidget(self.erofs_level_label)
         erofs_slider_row.addWidget(self.erofs_slider, 1)
@@ -613,11 +624,13 @@ class PackSettingsDialog(MessageBoxBase):
         # Brotli Level Slider
         brotli_row = QHBoxLayout()
         brotli_row.setSpacing(12)
+        brotli_row.setContentsMargins(0, 4, 0, 4)
         self.brotli_lbl = QLabel("Brotli Level: 0", build_card)
-        self.brotli_lbl.setStyleSheet("color: #e4e4e7; font-size: 13px; font-weight: 500; min-width: 105px;")
+        self.brotli_lbl.setStyleSheet("color: #e4e4e7; font-size: 13px; font-weight: 500; min-width: 110px;")
         self.brotli_slider = Slider(Qt.Orientation.Horizontal, build_card)
         self.brotli_slider.setRange(0, 11)
         self.brotli_slider.setValue(0)
+        self.brotli_slider.setFixedHeight(24)
         self.brotli_slider.valueChanged.connect(lambda v: self.brotli_lbl.setText(f"Brotli Level: {v}"))
         brotli_row.addWidget(self.brotli_lbl)
         brotli_row.addWidget(self.brotli_slider, 1)
@@ -702,7 +715,7 @@ class PackSuperMessageBox(MessageBoxBase):
         self._block_device_name = 'super'
 
         # Window styling configuration
-        self.widget.setMinimumWidth(450)
+        self.widget.setMinimumWidth(560)
 
         # 1. Main Header Title
         self.titleLabel = SubtitleLabel("Pack Super", self)
@@ -736,25 +749,36 @@ class PackSuperMessageBox(MessageBoxBase):
 
         # 4. Settings Section
         self.viewLayout.addWidget(SubtitleLabel("Settings", self))
-        lf2_layout = QHBoxLayout()
+        settings_grid = QGridLayout()
+        settings_grid.setHorizontalSpacing(16)
+        settings_grid.setVerticalSpacing(10)
 
-        lf2_layout.addWidget(SubtitleLabel("Group Name", self))
-        self.show_group_name = ComboBox(self)
+        lbl_group = BodyLabel("Group Name", self)
+        lbl_group.setStyleSheet("font-weight: 500;")
+        self.show_group_name = EditableComboBox(self)
         self.show_group_name.addItems(["qti_dynamic_partitions", "oplus_dynamic_partitions", "main", "mot_dp_group"])
         self.show_group_name.setCurrentIndex(0)
-        lf2_layout.addWidget(self.show_group_name)
+        self.show_group_name.setMinimumWidth(260)
 
-        lf2_layout.addWidget(SubtitleLabel("Super Size", self))
+        lbl_size = BodyLabel("Super Size", self)
+        lbl_size.setStyleSheet("font-weight: 500;")
         self.super_size_edit = LineEdit(self)
         self.super_size_edit.setText("9126805504")
         self.super_size_edit.textChanged.connect(self.validate_digits)
-        lf2_layout.addWidget(self.super_size_edit)
-        self.viewLayout.addLayout(lf2_layout)
+        self.super_size_edit.setMinimumWidth(260)
+
+        settings_grid.addWidget(lbl_group, 0, 0)
+        settings_grid.addWidget(self.show_group_name, 0, 1)
+        settings_grid.addWidget(lbl_size, 1, 0)
+        settings_grid.addWidget(self.super_size_edit, 1, 1)
+        settings_grid.setColumnStretch(1, 1)
+        self.viewLayout.addLayout(settings_grid)
 
         # 5. Pack Partitions Section
         self.viewLayout.addWidget(SubtitleLabel("Pack Partitions", self))
         self.tl = ListWidget(self)
-        self.tl.setMinimumHeight(180)
+        self.tl.setMinimumHeight(140)
+        self.tl.setMaximumHeight(200)
         self.tl.setSelectionMode(QListWidget.SelectionMode.NoSelection)
         self.tl.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.tl.setStyleSheet("""
@@ -777,6 +801,7 @@ class PackSuperMessageBox(MessageBoxBase):
                 background-color: rgba(255, 255, 255, 0.05);
             }
         """)
+        self.tl.itemChanged.connect(lambda: self.verify_size())
         self.viewLayout.addWidget(self.tl)
 
         # 6. Checkboxes & Action Layout Configurations
