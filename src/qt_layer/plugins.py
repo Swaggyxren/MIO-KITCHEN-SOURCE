@@ -9,20 +9,20 @@ from qfluentwidgets import IconWidget, CardWidget, BodyLabel, FluentIcon, Scroll
     SearchLineEdit, TitleLabel, TransparentDropDownToolButton, RoundMenu, Action, InfoBar, InfoBarPosition, \
     MessageBoxBase, GroupHeaderCardWidget, LineEdit, SwitchButton, RadioButton
 
-from avb_disabler import process_fstab
-from encryption_disabler import process_fstab_for_encryption
-from qsb_imger import process_by_xml
-from qt_layer.plugin_allow_selinux_audit import AllowSELinuxAuditMessageBox
-from qt_layer.plugin_byte_calc import FileBytesMessageBox
-from qt_layer.plugin_decrypt_xtc_xml import DecryptXtcXmlMessageBox
-from qt_layer.plugin_dis_avb_in_fstab import DisableAvbMessageBox
-from qt_layer.plugin_dis_encryption_in_fstab import DisableEncryptionMessageBox
-from qt_layer.plugin_get_file_info import FileInfoMessageBox
-from qt_layer.plugin_merge_qcom_partitions import MergeQualcommImageMessageBox
-from qt_layer.plugin_trim_raw_image import TrimRawImageMessageBox
+from src.core.avb_disabler import process_fstab
+from src.core.encryption_disabler import process_fstab_for_encryption
+from src.core.qsb_imger import process_by_xml
+from src.qt_layer.plugin_allow_selinux_audit import AllowSELinuxAuditMessageBox
+from src.qt_layer.plugin_byte_calc import FileBytesMessageBox
+from src.qt_layer.plugin_decrypt_xtc_xml import DecryptXtcXmlMessageBox
+from src.qt_layer.plugin_dis_avb_in_fstab import DisableAvbMessageBox
+from src.qt_layer.plugin_dis_encryption_in_fstab import DisableEncryptionMessageBox
+from src.qt_layer.plugin_get_file_info import FileInfoMessageBox
+from src.qt_layer.plugin_merge_qcom_partitions import MergeQualcommImageMessageBox
+from src.qt_layer.plugin_trim_raw_image import TrimRawImageMessageBox
 from src.core import images
-from qt_layer.projects import project_manger
-from qt_layer.settings import cfg
+from src.qt_layer.projects import project_manger
+from src.qt_layer.settings import cfg
 from src.core import imp
 from src.core import utils
 from src.core.addon_register import loader, Entry
