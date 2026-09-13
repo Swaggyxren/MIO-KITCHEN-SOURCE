@@ -156,7 +156,10 @@ class Builder:
                 dndplat = 'win-x64'
             elif platform.machine() == 'ARM64':
                 dndplat = 'win-arm64'
-        PyInstaller.__main__.run(base_args)
+        if os.path.exists('tool.spec'):
+            PyInstaller.__main__.run(['tool.spec', '--noconfirm'])
+        else:
+            PyInstaller.__main__.run(base_args)
         self.dndplat = dndplat
 
     def config_folder(self):
